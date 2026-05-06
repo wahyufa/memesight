@@ -85,8 +85,8 @@ tailwind.config = {
 <main class="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-8">
 
   <!-- ─── Win Rate Bar ────────────────────────────────────────────────────── -->
-  <div id="winRateBar" class="hidden rounded-2xl border border-slate-200/60 bg-white p-4 mb-2 shadow-sm">
-    <div class="flex flex-wrap gap-6 items-center">
+  <div id="winRateBar" class="hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
+    <div class="flex flex-wrap gap-6 items-center p-4">
       <div>
         <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Overall Win Rate</div>
         <div class="flex items-baseline gap-2">
@@ -127,7 +127,31 @@ tailwind.config = {
           <div class="text-sm font-semibold text-[#0a1b33]" id="wr-grad">—</div>
         </div>
       </div>
-      <div class="ml-auto text-xs text-slate-400">Based on <span id="wr-sessions">—</span> tracked tokens</div>
+      <div class="ml-auto flex items-center gap-4">
+        <span class="text-xs text-slate-400">Based on <span id="wr-sessions">—</span> tracked tokens</span>
+        <button id="winHistoryToggle" class="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-all flex items-center gap-1.5">
+          Show history <span id="winHistoryChevron">▼</span>
+        </button>
+      </div>
+    </div>
+    <div id="winHistoryTable" class="hidden border-t border-slate-200/70 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-xs uppercase tracking-wider text-slate-500 bg-slate-50/80">
+            <th class="px-4 py-3 text-left">Token</th>
+            <th class="px-4 py-3 text-left">Signal</th>
+            <th class="px-4 py-3 text-left">Type</th>
+            <th class="px-4 py-3 text-left">Entry MC</th>
+            <th class="px-4 py-3 text-left">Peak MC</th>
+            <th class="px-4 py-3 text-left">Gain</th>
+            <th class="px-4 py-3 text-left">Duration</th>
+            <th class="px-4 py-3 text-left">Called</th>
+          </tr>
+        </thead>
+        <tbody id="winHistoryBody">
+          <tr><td colspan="8" class="text-center py-8 text-slate-400">Loading…</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -138,7 +162,7 @@ tailwind.config = {
       <div class="flex-1 h-px bg-slate-200/80"></div>
       <span class="text-xs text-slate-400">ranked by signal strength + market cap</span>
     </div>
-    <div class="flex gap-4 overflow-x-auto pb-2" id="top5Container">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4" id="top5Container">
       <!-- cards injected here -->
       <div class="text-slate-400 text-sm py-8 w-full text-center">Loading…</div>
     </div>
@@ -153,12 +177,23 @@ tailwind.config = {
     </div>
 
     <!-- Filter pills -->
-    <div class="flex items-center gap-2 mb-4 flex-wrap">
-      <span class="text-xs text-slate-500">Filter:</span>
-      <button class="filter-btn active text-xs px-3 py-1 rounded-full border transition-all" data-filter="all">All</button>
-      <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="STRONG">🟢 STRONG</button>
-      <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="MEDIUM">🟡 MEDIUM</button>
-      <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="LOW">⚪ LOW</button>
+    <div class="flex flex-col gap-2 mb-4">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-slate-500 w-10">Signal:</span>
+        <button class="filter-btn active text-xs px-3 py-1 rounded-full border transition-all" data-filter="all">All</button>
+        <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="STRONG">🟢 STRONG</button>
+        <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="MEDIUM">🟡 MEDIUM</button>
+        <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="LOW">⚪ LOW</button>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-slate-500 w-10">Called:</span>
+        <button class="time-btn active text-xs px-3 py-1 rounded-full border transition-all" data-time="0">All time</button>
+        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="5">Last 5m</button>
+        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="30">Last 30m</button>
+        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="60">Last 1h</button>
+        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="360">Last 6h</button>
+        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="1440">Last 24h</button>
+      </div>
     </div>
 
     <div class="rounded-2xl border border-slate-200/60 bg-white overflow-hidden shadow-sm">
@@ -203,6 +238,7 @@ const MIN_MC     = 5_000;
 let sortKey    = 'market_cap';
 let sortDir    = 1; // 1 = asc, -1 = desc
 let filterSig  = 'all';
+let filterTime = 0; // minutes, 0 = all time
 let allCoins   = [];
 let countdown  = REFRESH_MS / 1000;
 let countdownTimer = null;
@@ -222,6 +258,18 @@ const timeAgo = ts => {
   const m = Math.floor(s/60);
   if (m < 60)   return m+'m ago';
   return Math.floor(m/60)+'h ago';
+};
+
+// createdAt from scanner is Unix seconds
+const tokenAgeStr = createdAt => {
+  if (!createdAt) return null;
+  const s = Math.floor(Date.now()/1000) - createdAt;
+  if (s < 0)    return null;
+  if (s < 60)   return s+'s old';
+  const m = Math.floor(s/60);
+  if (m < 60)   return m+'m old';
+  const h = Math.floor(m/60);
+  return h+'h '+(m%60)+'m old';
 };
 
 const fmtCallTime = ts => {
@@ -336,6 +384,7 @@ const mapToken = (t, migratedFlag) => {
     rugRatio:     t.rugRatio,
     twitter:      t.twitter,
     telegram:     t.telegram,
+    createdAt:    t.createdAt || null,
   };
 };
 
@@ -408,8 +457,16 @@ async function fetchData() {
 
 // ── Filter & sort pipeline ──
 function getWatchlist() {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const cutoffMs = filterTime > 0 ? Date.now() - filterTime * 60_000 : 0;
   return allCoins
-    .filter(c => c.migrated && c.market_cap >= MIN_MC)
+    .filter(c => {
+      if (!c.migrated) return false;
+      if (c.market_cap < MIN_MC) return false;
+      if (c.createdAt && (nowSec - c.createdAt) > 3600 && c.market_cap < 10_000) return false;
+      if (filterTime > 0 && (!c.called_at || c.called_at < cutoffMs)) return false;
+      return true;
+    })
     .sort((a, b) => {
       if (sortKey === 'buy_signal') {
         const rank = { STRONG:3, MEDIUM:2, LOW:1 };
@@ -417,8 +474,7 @@ function getWatchlist() {
       }
       const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0;
       return sortDir * (av - bv);
-    })
-    .slice(0, 25);
+    });
 }
 
 function getTop5(watchlist) {
@@ -485,7 +541,7 @@ function renderTop5(list) {
     const reasons  = getSignalReasons(c).slice(0, 2);
     const warnings = getWarnings(c);
     return `
-      <div class="flex-shrink-0 w-56 bg-white border rounded-2xl p-4 ${cardCls} flex flex-col gap-3 shadow-sm">
+      <div class="bg-white border rounded-2xl p-4 ${cardCls} flex flex-col gap-3 shadow-sm">
         <div class="flex items-center gap-2.5">
           ${logoHtml(c.contract, c.ticker, 9)}
           <div class="min-w-0">
@@ -513,6 +569,10 @@ function renderTop5(list) {
             <span class="text-slate-500">Called</span>
             <span class="text-slate-600">${c.called_at ? `${fmtCallTime(c.called_at)} | ${timeAgo(c.called_at)}` : c.last_updated}</span>
           </div>
+          ${tokenAgeStr(c.createdAt) ? `<div class="flex justify-between">
+            <span class="text-slate-500">Token Age</span>
+            <span class="text-slate-500 font-mono text-xs">${tokenAgeStr(c.createdAt)}</span>
+          </div>` : ''}
           <div class="flex justify-between">
             <span class="text-slate-500">MC Now</span>
             <span class="text-[#0a1b33] font-semibold">${fmtUSD(c.market_cap)}</span>
@@ -536,8 +596,9 @@ function renderTop5(list) {
 function renderWatchlist(list) {
   const filtered = filterSig === 'all' ? list : list.filter(c => c.buy_signal === filterSig);
   const body = document.getElementById('watchlistBody');
+  const timeLabel = filterTime === 0 ? 'all time' : filterTime < 60 ? `last ${filterTime}m` : filterTime < 1440 ? `last ${filterTime/60}h` : 'last 24h';
   document.getElementById('watchlistMeta').textContent =
-    `${filtered.length} of ${list.length} coins · MC ≥ $${(MIN_MC/1000).toFixed(0)}K · migrated only`;
+    `${filtered.length} of ${list.length} coins · MC ≥ $${(MIN_MC/1000).toFixed(0)}K · ${timeLabel}`;
 
   if (!filtered.length) {
     body.innerHTML = `<tr><td colspan="7" class="text-center py-16 text-slate-400">No coins match the current filter</td></tr>`;
@@ -567,6 +628,7 @@ function renderWatchlist(list) {
                 rel="noopener noreferrer"
                 class="text-xs text-blue-500/60 hover:text-blue-400 transition-colors">Detail →</a>` : `<span class="text-xs text-red-400">Missing full token address</span>`}
             </div>
+            ${tokenAgeStr(c.createdAt) ? `<div class="text-xs text-slate-400 mt-0.5">🕐 ${tokenAgeStr(c.createdAt)}</div>` : ''}
           </div>
         </div>
       </td>
@@ -663,6 +725,21 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 });
 
 
+// ── Time filter buttons ──
+document.querySelectorAll('.time-btn').forEach(btn => {
+  btn.className += ' ' + (btn.dataset.time === '0' ? filterBtnActive : filterBtnStyle);
+  btn.addEventListener('click', () => {
+    filterTime = parseInt(btn.dataset.time);
+    document.querySelectorAll('.time-btn').forEach(b => {
+      b.classList.remove(...filterBtnActive.split(' '));
+      b.classList.add(...filterBtnStyle.split(' '));
+    });
+    btn.classList.remove(...filterBtnStyle.split(' '));
+    btn.classList.add(...filterBtnActive.split(' '));
+    render();
+  });
+});
+
 // ── Countdown timer ──
 function startCountdown() {
   countdown = REFRESH_MS / 1000;
@@ -726,6 +803,68 @@ async function loadStats() {
     document.getElementById('wr-sessions').textContent       = s.overall.total;
   } catch {}
 }
+
+// ── Win History ──
+const TYPE_LABEL = { completed: 'Graduated', near_completion: 'Near Grad', new_creation: 'New Creation' };
+const fmtDuration = ms => {
+  if (!ms || ms < 0) return '—';
+  const m = Math.floor(ms / 60_000);
+  if (m < 60) return m + 'm';
+  return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+};
+
+let winHistoryOpen = false;
+let winHistoryLoaded = false;
+
+async function loadWinHistory() {
+  const body = document.getElementById('winHistoryBody');
+  try {
+    const { wins } = await fetch(BASE + '/api/wins').then(r => r.json());
+    if (!wins || !wins.length) {
+      body.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">No wins recorded yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = wins.map(w => {
+      const sig     = w.signal || '—';
+      const sigCls  = sig === 'STRONG' ? 'signal-strong' : sig === 'MEDIUM' ? 'signal-medium' : 'signal-low';
+      const gainPos = w.gainPct >= 0;
+      return `
+      <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors">
+        <td class="px-4 py-3">
+          <div class="font-semibold text-[#0a1b33] text-sm">$${w.symbol}</div>
+          ${w.address ? `<a href="https://gmgn.ai/sol/token/${w.address}" target="_blank" rel="noopener noreferrer"
+            class="text-xs font-mono text-slate-400 hover:text-blue-400 transition-colors">${w.address.slice(0,6)}…${w.address.slice(-4)}</a>` : ''}
+        </td>
+        <td class="px-4 py-3"><span class="${sigCls} text-xs font-bold px-2.5 py-1 rounded-full">${sig}</span></td>
+        <td class="px-4 py-3 text-xs text-slate-500">${TYPE_LABEL[w.type] || w.type || '—'}</td>
+        <td class="px-4 py-3 text-sm text-slate-600">${fmtUSD(w.entryMC)}</td>
+        <td class="px-4 py-3 text-sm font-semibold text-[#0a1b33]">${fmtUSD(w.peakMC)}</td>
+        <td class="px-4 py-3">
+          <div class="font-bold ${gainPos ? 'text-emerald-500' : 'text-red-400'}">${gainPos ? '+' : ''}${w.gainPct}%</div>
+          <div class="text-xs text-slate-400">${w.gainMultiple}x</div>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-500">${fmtDuration(w.durationMs)}</td>
+        <td class="px-4 py-3 text-xs text-slate-400">${w.ts ? timeAgo(w.ts) : '—'}</td>
+      </tr>`;
+    }).join('');
+  } catch {
+    body.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">Failed to load win history.</td></tr>';
+  }
+}
+
+document.getElementById('winHistoryToggle').addEventListener('click', () => {
+  winHistoryOpen = !winHistoryOpen;
+  const table   = document.getElementById('winHistoryTable');
+  const chevron = document.getElementById('winHistoryChevron');
+  const btn     = document.getElementById('winHistoryToggle');
+  table.classList.toggle('hidden', !winHistoryOpen);
+  chevron.textContent  = winHistoryOpen ? '▲' : '▼';
+  btn.firstChild.textContent = winHistoryOpen ? 'Hide history ' : 'Show history ';
+  if (winHistoryOpen && !winHistoryLoaded) {
+    winHistoryLoaded = true;
+    loadWinHistory();
+  }
+});
 
 // ── Boot ──
 fetchData();

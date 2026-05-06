@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MemeSight</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/scanner-config.js"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        bg:      '#f9fafb',
+        surface: '#ffffff',
+        border:  '#e2e8f0',
+        dim:     '#64748b',
+      },
+      fontFamily: {
+        sans: ['Inter','ui-sans-serif','system-ui','sans-serif'],
+        display: ['Outfit','ui-sans-serif','system-ui','sans-serif'],
+      },
+    }
+  }
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+  body { background:#f9fafb; color:#475569; font-family:'Inter',ui-sans-serif,system-ui,sans-serif; }
+  .font-display { font-family:'Outfit',ui-sans-serif,system-ui,sans-serif; }
+  .signal-strong { background:#dcfce7; color:#047857; border:1px solid #bbf7d0; }
+  .signal-medium { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
+  .signal-low    { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .pill-exit { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+  .card-strong { border-color:#bbf7d0; box-shadow:0 14px 35px -28px rgba(16,185,129,.7); }
+  .card-medium { border-color:#fde68a; }
+  .card-low    { border-color:#e2e8f0; }
+  .row-hover:hover { background:#f8fafc; }
+  .sort-active { color:#059669; }
+  ::-webkit-scrollbar { width:5px; height:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
+  .modal-overlay { background:rgba(0,0,0,.7); backdrop-filter:blur(4px); }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation:fadeIn .2s ease; }
+  .glow-green { text-shadow:0 0 12px rgba(16,185,129,.25); }
+</style>
+</head>
+<body class="text-slate-600 min-h-screen antialiased">
+
+<!-- ─── Header ─────────────────────────────────────────────────────────── -->
+<header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm bg-[#f9fafb]/80">
+  <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="font-display text-lg font-bold text-[#0a1b33] tracking-tight">Meme<span class="text-emerald-600">Sight</span></span>
+      <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold">BETA</span>
+    </div>
+    <div class="flex items-center gap-5">
+      <div class="text-right hidden sm:block">
+        <div class="text-xs text-slate-500">Refreshes in</div>
+        <div class="text-sm font-mono font-bold text-emerald-400" id="countdown">5:00</div>
+      </div>
+      <button class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#0a152d] text-white text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
+        Connect Wallet
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ─── Status bar ──────────────────────────────────────────────────────── -->
+<div class="border-b border-slate-200/60 bg-white/70">
+  <div class="max-w-[1400px] mx-auto px-6 py-2 flex items-center gap-5 text-xs text-slate-500">
+    <div class="flex items-center gap-1.5">
+      <div class="w-1.5 h-1.5 rounded-full bg-emerald-400" id="apiDot" style="box-shadow:0 0 5px #34d399"></div>
+      <span id="apiStatus">connecting…</span>
+    </div>
+    <span>Scans: <span class="text-slate-700" id="hdrScans">—</span></span>
+    <span>Tokens seen: <span class="text-slate-700" id="hdrSeen">—</span></span>
+    <span>Uptime: <span class="text-slate-700" id="hdrUptime">—</span></span>
+    <span class="ml-auto text-slate-400">⚠️ Not financial advice — DYOR</span>
+  </div>
+</div>
+
+<main class="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+
+  <!-- ─── Win Rate Bar ────────────────────────────────────────────────────── -->
+  <div id="winRateBar" class="hidden rounded-2xl border border-slate-200/60 bg-white p-4 mb-2 shadow-sm">
+    <div class="flex flex-wrap gap-6 items-center">
+      <div>
+        <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Overall Win Rate</div>
+        <div class="flex items-baseline gap-2">
+          <span class="text-2xl font-bold text-[#0a1b33]" id="wr-overall">—</span>
+          <span class="text-sm text-slate-500" id="wr-overall-total"></span>
+        </div>
+      </div>
+      <div class="h-10 w-px bg-slate-200"></div>
+      <div class="flex gap-5">
+        <div class="text-center">
+          <div class="text-xs font-bold text-emerald-400 mb-0.5">STRONG</div>
+          <div class="text-base font-bold text-[#0a1b33]" id="wr-strong">—</div>
+          <div class="text-xs text-slate-600" id="wr-strong-n"></div>
+        </div>
+        <div class="text-center">
+          <div class="text-xs font-bold text-amber-400 mb-0.5">MEDIUM</div>
+          <div class="text-base font-bold text-[#0a1b33]" id="wr-medium">—</div>
+          <div class="text-xs text-slate-600" id="wr-medium-n"></div>
+        </div>
+        <div class="text-center">
+          <div class="text-xs font-bold text-slate-500 mb-0.5">LOW</div>
+          <div class="text-base font-bold text-[#0a1b33]" id="wr-low">—</div>
+          <div class="text-xs text-slate-600" id="wr-low-n"></div>
+        </div>
+      </div>
+      <div class="h-10 w-px bg-slate-200 hidden sm:block"></div>
+      <div class="flex gap-5 hidden sm:flex">
+        <div class="text-center">
+          <div class="text-xs text-slate-500 mb-0.5">New Creation</div>
+          <div class="text-sm font-semibold text-[#0a1b33]" id="wr-new">—</div>
+        </div>
+        <div class="text-center">
+          <div class="text-xs text-slate-500 mb-0.5">Near Grad</div>
+          <div class="text-sm font-semibold text-[#0a1b33]" id="wr-near">—</div>
+        </div>
+        <div class="text-center">
+          <div class="text-xs text-slate-500 mb-0.5">Graduated</div>
+          <div class="text-sm font-semibold text-[#0a1b33]" id="wr-grad">—</div>
+        </div>
+      </div>
+      <div class="ml-auto text-xs text-slate-400">Based on <span id="wr-sessions">—</span> tracked tokens</div>
+    </div>
+  </div>
+
+  <!-- ─── Section 1: Top 5 ──────────────────────────────────────────────── -->
+  <section>
+    <div class="flex items-center gap-3 mb-4">
+      <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500">Top 5 Performers</h2>
+      <div class="flex-1 h-px bg-slate-200/80"></div>
+      <span class="text-xs text-slate-400">ranked by signal strength + market cap</span>
+    </div>
+    <div class="flex gap-4 overflow-x-auto pb-2" id="top5Container">
+      <!-- cards injected here -->
+      <div class="text-slate-400 text-sm py-8 w-full text-center">Loading…</div>
+    </div>
+  </section>
+
+  <!-- ─── Section 2: Watchlist ──────────────────────────────────────────── -->
+  <section>
+    <div class="flex items-center gap-3 mb-4">
+      <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500">Watchlist</h2>
+      <div class="flex-1 h-px bg-slate-200/80"></div>
+      <span class="text-xs text-slate-400" id="watchlistMeta">—</span>
+    </div>
+
+    <!-- Filter pills -->
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
+      <span class="text-xs text-slate-500">Filter:</span>
+      <button class="filter-btn active text-xs px-3 py-1 rounded-full border transition-all" data-filter="all">All</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="STRONG">🟢 STRONG</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="MEDIUM">🟡 MEDIUM</button>
+      <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="LOW">⚪ LOW</button>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200/60 bg-white overflow-hidden shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200/70 text-xs uppercase tracking-wider text-slate-500 bg-slate-50/80">
+              <th class="px-4 py-3 text-left w-8">#</th>
+              <th class="px-4 py-3 text-left">Token</th>
+              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] transition-colors select-none" id="thMC">
+                Start MC / Called <span id="mcSort" class="sort-active">↑</span>
+              </th>
+              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] transition-colors select-none" id="thMCNow">
+                MC Now <span id="mcNowSort" class="hidden">↑</span>
+              </th>
+              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] transition-colors select-none" id="thSignal">
+                Signal + Est. Profit <span id="sigSort" class="hidden">↓</span>
+              </th>
+              <th class="px-4 py-3 text-left">Exit + Reason</th>
+              <th class="px-4 py-3 text-left">Links</th>
+            </tr>
+          </thead>
+          <tbody id="watchlistBody">
+            <tr><td colspan="7" class="text-center py-16 text-slate-400">Loading watchlist…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+
+<script>
+// ── Config ──
+const BASE       = (typeof window !== 'undefined' && window.SCANNER_BASE) || 'http://localhost:3000';
+const API_URL    = BASE + '/api/state';
+const REFRESH_MS = 15_000; // keep MC Now close to scanner state
+const MIN_MC     = 5_000;
+
+// ── State ──
+let sortKey    = 'market_cap';
+let sortDir    = 1; // 1 = asc, -1 = desc
+let filterSig  = 'all';
+let allCoins   = [];
+let countdown  = REFRESH_MS / 1000;
+let countdownTimer = null;
+
+// ── Helpers ──
+const fmtUSD = v => {
+  if (!v || isNaN(v)) return '—';
+  if (v >= 1e9) return '$'+(v/1e9).toFixed(2)+'B';
+  if (v >= 1e6) return '$'+(v/1e6).toFixed(2)+'M';
+  if (v >= 1e3) return '$'+(v/1e3).toFixed(1)+'K';
+  return '$'+Number(v).toFixed(0);
+};
+
+const timeAgo = ts => {
+  const s = Math.floor((Date.now()-ts)/1000);
+  if (s < 60)   return s+'s ago';
+  const m = Math.floor(s/60);
+  if (m < 60)   return m+'m ago';
+  return Math.floor(m/60)+'h ago';
+};
+
+const fmtCallTime = ts => {
+  if (!ts) return 'unknown';
+  return new Date(ts).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
+
+const truncAddr = a => a ? a.slice(0,6)+'…'+a.slice(-4) : '—';
+
+const SOL_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const SOL_ADDRESS_IN_TEXT_RE = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
+
+const normalizeSolAddress = value => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (SOL_ADDRESS_RE.test(trimmed)) return trimmed;
+  return trimmed.match(SOL_ADDRESS_IN_TEXT_RE)?.[0] || '';
+};
+
+const resolveTokenAddress = token => {
+  const candidates = [
+    token?.address,
+    token?.tokenAddress,
+    token?.token_address,
+    token?.contract,
+    token?.contractAddress,
+    token?.mint,
+    token?.ca,
+    token?.baseAddress,
+    token?.base_address,
+    token?.token?.address,
+    token?.baseToken?.address,
+    token?.base_token?.address,
+  ];
+  for (const candidate of candidates) {
+    const address = normalizeSolAddress(candidate);
+    if (address) return address;
+  }
+  return '';
+};
+
+// ── Signal from action/score ──
+const getSignal = coin => {
+  if (coin.action === 'BUY')   return 'STRONG';
+  if (coin.action === 'WATCH') return 'MEDIUM';
+  // Fallback: score-based
+  const pct = coin.score && coin.maxScore ? coin.score / coin.maxScore : 0;
+  if (pct >= 0.55) return 'STRONG';
+  if (pct >= 0.35) return 'MEDIUM';
+  return 'LOW';
+};
+
+// ── Volatility from gainPct ──
+const getVolatility = coin => {
+  const g = coin.gainPct ?? 0;
+  if (g > 150) return 'extreme';
+  if (g > 60)  return 'high';
+  if (g > 20)  return 'medium';
+  return 'low';
+};
+
+// ── Exit windows from volatility ──
+const EXIT_WINDOWS = {
+  extreme: ['10min'],
+  high:    ['10min','1hr'],
+  medium:  ['1hr','4hr'],
+  low:     ['4hr','12hr'],
+};
+
+// ── Current MC estimate ──
+const curMC = coin => {
+  if (!coin.marketCap) return 0;
+  if (coin.firstOpen && coin.currentClose && coin.firstOpen > 0)
+    return (coin.currentClose / coin.firstOpen) * coin.marketCap;
+  return coin.marketCap;
+};
+
+// ── Map API token to coin spec ──
+const mapToken = (t, migratedFlag) => {
+  const mc     = curMC(t);
+  const signal = getSignal(t);
+  const vol    = getVolatility(t);
+  const address = resolveTokenAddress(t);
+  return {
+    id:           address || t.address || t.symbol,
+    ticker:       t.symbol,
+    name:         t.name || t.symbol,
+    contract:     address,
+    start_mc:     t.marketCap || 0,
+    market_cap:   mc,
+    called_at:    t.addedAt || null,
+    migrated:     migratedFlag,
+    buy_signal:   signal,
+    volatility:   vol,
+    last_updated: timeAgo(t.addedAt),
+    source:       t.type === 'completed' ? 'gmgn' : 'pumpfun',
+    type:         t.type || 'new',
+    gainPct:      t.gainPct,
+    score:        t.score,
+    maxScore:     t.maxScore,
+    reasons:      t.reasons || [],
+    smartMoney:   t.smartMoney ?? 0,
+    kol:          t.kol ?? 0,
+    buys:         t.buys ?? 0,
+    sells:        t.sells ?? 0,
+    bundlerRate:  t.bundlerRate,
+    rugRatio:     t.rugRatio,
+    twitter:      t.twitter,
+    telegram:     t.telegram,
+  };
+};
+
+// ── Signal reasons (human-readable) ──
+const getSignalReasons = coin => {
+  // Server-supplied reasons (graduation tokens) — filter out warning flags
+  const srv = (coin.reasons || []).filter(r => !r.startsWith('⚠️')).slice(0, 4);
+  if (srv.length > 0) return srv;
+  // Compute for new-creation tokens
+  const r = [];
+  if (coin.smartMoney > 0) r.push(`${coin.smartMoney} Smart Money wallet${coin.smartMoney > 1 ? 's' : ''}`);
+  if (coin.kol > 0)        r.push(`${coin.kol} KOL wallet${coin.kol > 1 ? 's' : ''}`);
+  if (coin.gainPct > 0)    r.push(`+${coin.gainPct?.toFixed(0)}% price gain`);
+  const bsr = coin.buys && coin.sells ? coin.buys / coin.sells : 0;
+  if (bsr >= 2)            r.push(`Buy/Sell ratio ${bsr.toFixed(1)}x`);
+  if (coin.bundlerRate != null && coin.bundlerRate < 0.20) r.push(`Organic buyers (${(coin.bundlerRate*100).toFixed(0)}% bundler)`);
+  if (coin.rugRatio != null && coin.rugRatio < 0.05)       r.push('Rug risk: near zero');
+  return r.length ? r.slice(0, 4) : ['Insufficient signal data'];
+};
+
+// ── Warning flags (from reasons) ──
+const getWarnings = coin =>
+  (coin.reasons || []).filter(r => r.startsWith('⚠️'));
+
+// ── Exit reason text ──
+const EXIT_REASONS = {
+  extreme: 'Extreme volatility — sharp reversal likely, take profits fast',
+  high:    'High momentum — price moving quickly, lock in gains early',
+  medium:  'Moderate move — give time to develop, watch for reversal',
+  low:     'Low volatility — patient hold, longer window acceptable',
+};
+
+// ── Profit estimate (min expected if recommendation followed) ──
+const PROFIT_EST = {
+  STRONG: { extreme: '+80–300%', high: '+40–150%', medium: '+15–60%', low:  '+5–25%'   },
+  MEDIUM: { extreme: '+25–100%', high: '+12–50%',  medium: '+5–25%',  low:  '+2–10%'   },
+  LOW:    { extreme: '+5–30%',   high: '+3–15%',   medium: '+1–8%',   low:  'minimal'  },
+};
+const getProfitEst = (signal, vol) => PROFIT_EST[signal]?.[vol] || '—';
+
+// ── Fetch & transform ──
+async function fetchData() {
+  try {
+    const d = await fetch(API_URL, { cache: 'no-store' }).then(r => r.json());
+
+    // Status bar
+    document.getElementById('apiDot').style.boxShadow = '0 0 5px #34d399';
+    document.getElementById('apiDot').style.background = '#34d399';
+    document.getElementById('apiStatus').textContent = 'live';
+    document.getElementById('hdrScans').textContent  = d.session?.scanCount ?? '—';
+    document.getElementById('hdrSeen').textContent   = d.session?.totalSeen ?? '—';
+    document.getElementById('hdrUptime').textContent = d.session?.uptime ?? '—';
+
+    const gradTokens = (d.graduationWatch || []).map(t =>
+      mapToken(t, t.type === 'completed' || t.type === 'near_completion')
+    );
+    const newTokens  = (d.watchlist || []).map(t => mapToken(t, false));
+
+    allCoins = [...gradTokens, ...newTokens];
+    render();
+
+  } catch {
+    document.getElementById('apiDot').style.boxShadow = '0 0 5px #f87171';
+    document.getElementById('apiDot').style.background = '#f87171';
+    document.getElementById('apiStatus').textContent = 'offline';
+    allCoins = [];
+    render();
+  }
+}
+
+// ── Filter & sort pipeline ──
+function getWatchlist() {
+  return allCoins
+    .filter(c => c.migrated && c.market_cap >= MIN_MC)
+    .sort((a, b) => {
+      if (sortKey === 'buy_signal') {
+        const rank = { STRONG:3, MEDIUM:2, LOW:1 };
+        return sortDir * (rank[b.buy_signal] - rank[a.buy_signal] || b.market_cap - a.market_cap);
+      }
+      const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0;
+      return sortDir * (av - bv);
+    })
+    .slice(0, 25);
+}
+
+function getTop5(watchlist) {
+  const rank = { STRONG:3, MEDIUM:2, LOW:1 };
+  return [...watchlist]
+    .sort((a, b) => rank[b.buy_signal] - rank[a.buy_signal] || b.market_cap - a.market_cap)
+    .slice(0, 5);
+}
+
+// ── Signal badge HTML ──
+const sigBadge = sig => {
+  const cls = sig === 'STRONG' ? 'signal-strong' : sig === 'MEDIUM' ? 'signal-medium' : 'signal-low';
+  return `<span class="${cls} text-xs font-bold px-2.5 py-1 rounded-full">${sig}</span>`;
+};
+
+// ── Exit pills HTML ──
+const exitPills = vol => {
+  const wins = EXIT_WINDOWS[vol] || ['1hr'];
+  return wins.map(w => `<span class="pill-exit text-xs px-2 py-0.5 rounded-full">${w}</span>`).join(' ');
+};
+
+// ── Token logo HTML ──
+const logoHtml = (contract, ticker, size = 8) =>
+  contract ? `<div class="relative flex-shrink-0 w-${size} h-${size}">
+    <img src="https://dd.dexscreener.com/ds-data/tokens/solana/${contract}.png"
+         class="w-${size} h-${size} rounded-full object-cover"
+         onerror="this.style.display='none';this.nextSibling.style.display='flex'"/>
+    <div class="w-${size} h-${size} rounded-full bg-slate-100 border border-slate-200 items-center justify-center text-xs font-bold text-slate-500 uppercase absolute inset-0" style="display:none">
+      ${ticker.slice(0,2)}
+    </div>
+  </div>` :
+  `<div class="relative flex-shrink-0 w-${size} h-${size} rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 uppercase">${ticker.slice(0,2)}</div>`;
+
+// ── Direct buy links HTML ──
+const buyLinks = contract =>
+  contract ? `<div class="flex gap-1.5">
+    <a href="https://pump.fun/coin/${contract}" target="_blank"
+       aria-label="Open on Pump.fun"
+       title="Pump.fun"
+       rel="noopener noreferrer"
+       class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+      <img src="./src/img/pumpfun.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
+    </a>
+    <a href="https://gmgn.ai/sol/token/${contract}" target="_blank"
+       aria-label="Open on GMGN"
+       title="GMGN"
+       rel="noopener noreferrer"
+       class="inline-flex h-8 w-16 items-center justify-center rounded-full bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+      <img src="./src/img/gmgn.svg" alt="" class="h-4 w-12 object-contain" loading="lazy"/>
+    </a>
+  </div>` :
+  `<span class="text-xs text-slate-400">Address unavailable</span>`;
+
+// ── Render Top 5 ──
+function renderTop5(list) {
+  const container = document.getElementById('top5Container');
+  if (!list.length) {
+    container.innerHTML = '<p class="text-slate-400 text-sm py-8 w-full text-center">No migrated tokens yet. Waiting for data…</p>';
+    return;
+  }
+  container.innerHTML = list.map(c => {
+    const cardCls  = c.buy_signal === 'STRONG' ? 'card-strong' : c.buy_signal === 'MEDIUM' ? 'card-medium' : 'card-low';
+    const est      = getProfitEst(c.buy_signal, c.volatility);
+    const reasons  = getSignalReasons(c).slice(0, 2);
+    const warnings = getWarnings(c);
+    return `
+      <div class="flex-shrink-0 w-56 bg-white border rounded-2xl p-4 ${cardCls} flex flex-col gap-3 shadow-sm">
+        <div class="flex items-center gap-2.5">
+          ${logoHtml(c.contract, c.ticker, 9)}
+          <div class="min-w-0">
+            <div class="font-bold text-[#0a1b33] text-sm">$${c.ticker}</div>
+            <div class="text-xs text-slate-500 truncate">${c.name}</div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          ${sigBadge(c.buy_signal)}
+          <span class="text-xs font-semibold ${c.buy_signal === 'STRONG' ? 'text-emerald-400' : c.buy_signal === 'MEDIUM' ? 'text-amber-400' : 'text-slate-500'}">${est}</span>
+        </div>
+
+        <div class="space-y-1">
+          ${reasons.map(r => `<div class="text-xs text-slate-500 flex items-center gap-1"><span class="text-slate-600">·</span>${r}</div>`).join('')}
+          ${warnings.map(w => `<div class="text-xs text-amber-500/80 flex items-center gap-1">${w}</div>`).join('')}
+        </div>
+
+        <div class="space-y-1.5 text-xs border-t border-slate-200/70 pt-2.5">
+          <div class="flex justify-between">
+            <span class="text-slate-500">Start MC</span>
+            <span class="text-[#0a1b33] font-semibold">${fmtUSD(c.start_mc)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Called</span>
+            <span class="text-slate-600">${c.called_at ? `${fmtCallTime(c.called_at)} | ${timeAgo(c.called_at)}` : c.last_updated}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">MC Now</span>
+            <span class="text-[#0a1b33] font-semibold">${fmtUSD(c.market_cap)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Exit</span>
+            <div class="flex gap-1">${exitPills(c.volatility)}</div>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Why exit?</span>
+            <span class="text-slate-600 text-right max-w-[130px] leading-tight">${EXIT_REASONS[c.volatility].split('—')[0].trim()}</span>
+          </div>
+        </div>
+
+        ${buyLinks(c.contract)}
+      </div>`;
+  }).join('');
+}
+
+// ── Render Watchlist ──
+function renderWatchlist(list) {
+  const filtered = filterSig === 'all' ? list : list.filter(c => c.buy_signal === filterSig);
+  const body = document.getElementById('watchlistBody');
+  document.getElementById('watchlistMeta').textContent =
+    `${filtered.length} of ${list.length} coins · MC ≥ $${(MIN_MC/1000).toFixed(0)}K · migrated only`;
+
+  if (!filtered.length) {
+    body.innerHTML = `<tr><td colspan="7" class="text-center py-16 text-slate-400">No coins match the current filter</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = filtered.map((c, i) => {
+    const reasons  = getSignalReasons(c);
+    const warnings = getWarnings(c);
+    const est      = getProfitEst(c.buy_signal, c.volatility);
+    const exitNote = EXIT_REASONS[c.volatility] || '';
+    return `
+    <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors">
+      <td class="px-4 py-3.5 text-slate-400 text-xs">${i + 1}</td>
+
+      <!-- Token -->
+      <td class="px-4 py-3.5">
+        <div class="flex items-center gap-3">
+          ${logoHtml(c.contract, c.ticker, 9)}
+          <div>
+            <div class="font-semibold text-[#0a1b33] text-sm">$${c.ticker}</div>
+            <div class="text-xs text-slate-500 max-w-[150px] truncate">${c.name}</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              ${c.contract ? `<span class="text-xs font-mono text-slate-600 cursor-pointer hover:text-slate-400 transition-colors"
+                onclick="navigator.clipboard.writeText('${c.contract}')" title="Click to copy">${truncAddr(c.contract)}</span>
+              <a href="/token.html?address=${encodeURIComponent(c.contract)}" target="_blank"
+                rel="noopener noreferrer"
+                class="text-xs text-blue-500/60 hover:text-blue-400 transition-colors">Detail →</a>` : `<span class="text-xs text-red-400">Missing full token address</span>`}
+            </div>
+          </div>
+        </div>
+      </td>
+
+      <!-- Start MC -->
+      <td class="px-4 py-3.5">
+        <div class="text-slate-500 text-sm">${fmtUSD(c.start_mc)}</div>
+        <div class="text-xs text-slate-600 mt-0.5">${c.called_at ? `called ${fmtCallTime(c.called_at)}` : 'call time unknown'}</div>
+        <div class="text-xs text-slate-400">${c.called_at ? timeAgo(c.called_at) : c.last_updated}</div>
+      </td>
+
+      <!-- MC Now -->
+      <td class="px-4 py-3.5">
+        <div class="font-semibold text-[#0a1b33]">${fmtUSD(c.market_cap)}</div>
+        ${c.gainPct != null ? `<div class="text-xs ${c.gainPct >= 0 ? 'text-emerald-400' : 'text-red-400'}">${c.gainPct >= 0 ? '+' : ''}${c.gainPct.toFixed(1)}%</div>` : ''}
+      </td>
+
+      <!-- Signal + reasons + profit est -->
+      <td class="px-4 py-3.5" style="min-width:200px">
+        <div class="flex items-center gap-2 mb-1.5">
+          ${sigBadge(c.buy_signal)}
+          <span class="text-xs font-semibold ${c.buy_signal === 'STRONG' ? 'text-emerald-400' : c.buy_signal === 'MEDIUM' ? 'text-amber-400' : 'text-slate-500'}">${est}</span>
+        </div>
+        <div class="space-y-0.5">
+          ${reasons.map(r => `<div class="text-xs text-slate-500 flex items-start gap-1"><span class="text-slate-700 mt-0.5">·</span><span>${r}</span></div>`).join('')}
+          ${warnings.map(w => `<div class="text-xs text-amber-600/80">${w}</div>`).join('')}
+        </div>
+      </td>
+
+      <!-- Exit + reason -->
+      <td class="px-4 py-3.5" style="min-width:180px">
+        <div class="flex flex-wrap gap-1 mb-1.5">${exitPills(c.volatility)}</div>
+        <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">from call</div>
+        <div class="text-xs text-slate-600 leading-tight">${exitNote}</div>
+      </td>
+
+      <!-- Direct links -->
+      <td class="px-4 py-3.5">${buyLinks(c.contract)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Main render ──
+function render() {
+  const watchlist = getWatchlist();
+  const top5      = getTop5(watchlist);
+  renderTop5(top5);
+  renderWatchlist(watchlist);
+}
+
+// ── Sort ──
+document.getElementById('thMC').addEventListener('click', () => {
+  if (sortKey === 'start_mc') sortDir *= -1;
+  else { sortKey = 'start_mc'; sortDir = 1; }
+  document.getElementById('mcSort').textContent    = sortDir === 1 ? '↑' : '↓';
+  document.getElementById('mcSort').className      = 'sort-active';
+  document.getElementById('mcNowSort').className   = 'hidden';
+  document.getElementById('sigSort').className     = 'hidden';
+  render();
+});
+document.getElementById('thMCNow').addEventListener('click', () => {
+  if (sortKey === 'market_cap') sortDir *= -1;
+  else { sortKey = 'market_cap'; sortDir = 1; }
+  document.getElementById('mcNowSort').textContent = sortDir === 1 ? '↑' : '↓';
+  document.getElementById('mcNowSort').className   = 'sort-active';
+  document.getElementById('mcSort').className      = 'hidden';
+  document.getElementById('sigSort').className     = 'hidden';
+  render();
+});
+document.getElementById('thSignal').addEventListener('click', () => {
+  if (sortKey === 'buy_signal') sortDir *= -1;
+  else { sortKey = 'buy_signal'; sortDir = 1; }
+  document.getElementById('sigSort').textContent = sortDir === 1 ? '↓' : '↑';
+  document.getElementById('sigSort').className   = 'sort-active';
+  document.getElementById('mcSort').className    = 'hidden';
+  render();
+});
+
+// ── Filter buttons ──
+const filterBtnStyle  = 'bg-white border-slate-200 text-slate-500 hover:border-slate-300';
+const filterBtnActive = 'bg-emerald-50 border-emerald-200 text-emerald-700';
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.className += ' ' + (btn.dataset.filter === 'all' ? filterBtnActive : filterBtnStyle);
+  btn.addEventListener('click', () => {
+    filterSig = btn.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.remove(...filterBtnActive.split(' '));
+      b.classList.add(...filterBtnStyle.split(' '));
+    });
+    btn.classList.remove(...filterBtnStyle.split(' '));
+    btn.classList.add(...filterBtnActive.split(' '));
+    render();
+  });
+});
+
+
+// ── Countdown timer ──
+function startCountdown() {
+  countdown = REFRESH_MS / 1000;
+  if (countdownTimer) clearInterval(countdownTimer);
+  const tick = () => {
+    countdown--;
+    const m = Math.floor(countdown / 60);
+    const s = countdown % 60;
+    document.getElementById('countdown').textContent = `${m}:${String(s).padStart(2,'0')}`;
+    if (countdown <= 0) {
+      fetchData();
+      countdown = REFRESH_MS / 1000;
+    }
+  };
+  countdownTimer = setInterval(tick, 1000);
+}
+
+// ── Mock data (fallback when scanner is offline) ──
+const MOCK_COINS = [
+  { id:'1', ticker:'PEPE2',   name:'Pepe Two',          contract:'7xKpABC123def456GHI789jkl', market_cap:24500,  migrated:true,  buy_signal:'STRONG', volatility:'high',    last_updated:'2m ago',  gainPct:142.3, score:8,  maxScore:10, source:'pumpfun' },
+  { id:'2', ticker:'SOLCAT',  name:'Solana Cat',         contract:'8mNqDEF456ghi789JKL012mn',  market_cap:31200,  migrated:true,  buy_signal:'STRONG', volatility:'extreme', last_updated:'1m ago',  gainPct:287.1, score:9,  maxScore:10, source:'gmgn'    },
+  { id:'3', ticker:'DOGE3',   name:'Doge Three',         contract:'3pRsTUV789jkl012MNO345op',  market_cap:45800,  migrated:true,  buy_signal:'MEDIUM', volatility:'high',    last_updated:'4m ago',  gainPct:78.4,  score:6,  maxScore:10, source:'pumpfun' },
+  { id:'4', ticker:'MOON',    name:'Moon Token',         contract:'9qStWXY012mno345PQR678qr',  market_cap:22100,  migrated:true,  buy_signal:'MEDIUM', volatility:'medium',  last_updated:'6m ago',  gainPct:34.7,  score:5,  maxScore:10, source:'gmgn'    },
+  { id:'5', ticker:'PEPO',    name:'Pepo Frog',          contract:'2rUvXYZ345pqr678STU901rs',  market_cap:67300,  migrated:true,  buy_signal:'STRONG', volatility:'high',    last_updated:'3m ago',  gainPct:195.2, score:9,  maxScore:10, source:'pumpfun' },
+  { id:'6', ticker:'WAGMI',   name:'We All Gonna Make',  contract:'4sVwYZA678qrs901TUV234st',  market_cap:52400,  migrated:true,  buy_signal:'LOW',    volatility:'low',     last_updated:'12m ago', gainPct:8.3,   score:2,  maxScore:10, source:'gmgn'    },
+  { id:'7', ticker:'BONK2',   name:'Bonk Two',           contract:'5tWxZAB901rst234UVW567tu',  market_cap:38900,  migrated:true,  buy_signal:'MEDIUM', volatility:'medium',  last_updated:'8m ago',  gainPct:44.1,  score:5,  maxScore:10, source:'pumpfun' },
+  { id:'8', ticker:'SILLY',   name:'Silly Goose',        contract:'6uXyABC234stu567VWX890uv',  market_map:29700,  market_cap:29700, migrated:true, buy_signal:'STRONG', volatility:'high', last_updated:'2m ago', gainPct:123.5, score:7, maxScore:10, source:'pumpfun' },
+  { id:'9', ticker:'CHAD',    name:'Chad Coin',          contract:'7vYzBCD567tuv890WXY123vw',  market_cap:41500,  migrated:true,  buy_signal:'LOW',    volatility:'low',     last_updated:'15m ago', gainPct:5.2,   score:3,  maxScore:10, source:'gmgn'    },
+  { id:'10',ticker:'PUMP',    name:'Pump It',            contract:'8wZACDE890uvw123XYZ456wx',  market_cap:35600,  migrated:true,  buy_signal:'MEDIUM', volatility:'medium',  last_updated:'7m ago',  gainPct:55.8,  score:5,  maxScore:10, source:'pumpfun' },
+  { id:'11',ticker:'FROG',    name:'Frog Season',        contract:'9xABDEF123vwx456YZA789xy',  market_cap:58200,  migrated:true,  buy_signal:'STRONG', volatility:'extreme', last_updated:'1m ago',  gainPct:310.4, score:10, maxScore:10, source:'gmgn'    },
+  { id:'12',ticker:'KITTY',   name:'Solana Kitty',       contract:'1yBCEFG456wxy789ZAB012yz',  market_cap:26800,  migrated:true,  buy_signal:'LOW',    volatility:'low',     last_updated:'20m ago', gainPct:11.0,  score:2,  maxScore:10, source:'pumpfun' },
+  { id:'13',ticker:'ALPHA',   name:'Alpha Ape',          contract:'2zCDFGH789xyz012ABC345za',  market_cap:73100,  migrated:true,  buy_signal:'MEDIUM', volatility:'high',    last_updated:'5m ago',  gainPct:88.7,  score:6,  maxScore:10, source:'gmgn'    },
+  { id:'14',ticker:'GIGA',    name:'Giga Brain',         contract:'3aDEGHI012yza345BCD678ab',  market_cap:21300,  migrated:true,  buy_signal:'STRONG', volatility:'high',    last_updated:'3m ago',  gainPct:162.9, score:8,  maxScore:10, source:'pumpfun' },
+  { id:'15',ticker:'BASED',   name:'Based Token',        contract:'4bEFHIJ345zab678CDE901bc',  market_cap:48700,  migrated:true,  buy_signal:'LOW',    volatility:'low',     last_updated:'18m ago', gainPct:6.4,   score:1,  maxScore:10, source:'gmgn'    },
+  // ineligible (filtered out)
+  { id:'16',ticker:'POOR',    name:'Poor Coin',          contract:'5cFGIJK678abc901DEF234cd',  market_cap:15000,  migrated:true,  buy_signal:'LOW',    volatility:'low',     last_updated:'30m ago', gainPct:-2.1,  score:1,  maxScore:10, source:'pumpfun' },
+  { id:'17',ticker:'SOON',    name:'Soon Token',         contract:'6dGHJKL901bcd234EFG567de',  market_cap:80000,  migrated:false, buy_signal:'STRONG', volatility:'extreme', last_updated:'0m ago',  gainPct:400.0, score:10, maxScore:10, source:'gmgn' },
+].map(c => ({
+  ...c,
+  type:     c.migrated ? 'completed' : 'new',
+  start_mc: c.gainPct != null ? Math.round(c.market_cap / (1 + c.gainPct / 100)) : c.market_cap,
+}));
+
+// ── Win rate stats ──
+async function loadStats() {
+  try {
+    const s = await fetch(BASE + '/api/stats').then(r => r.json());
+    if (s.overall.total === 0) return;
+    document.getElementById('winRateBar').classList.remove('hidden');
+    document.getElementById('wr-overall').textContent        = s.overall.rate + '%';
+    document.getElementById('wr-overall-total').textContent  = `${s.overall.wins}W / ${s.overall.total - s.overall.wins}L`;
+    document.getElementById('wr-strong').textContent         = (s.bySignal.STRONG?.rate ?? '—') + '%';
+    document.getElementById('wr-strong-n').textContent       = `${s.bySignal.STRONG?.wins ?? 0}/${s.bySignal.STRONG?.total ?? 0}`;
+    document.getElementById('wr-medium').textContent         = (s.bySignal.MEDIUM?.rate ?? '—') + '%';
+    document.getElementById('wr-medium-n').textContent       = `${s.bySignal.MEDIUM?.wins ?? 0}/${s.bySignal.MEDIUM?.total ?? 0}`;
+    document.getElementById('wr-low').textContent            = (s.bySignal.LOW?.rate ?? '—') + '%';
+    document.getElementById('wr-low-n').textContent          = `${s.bySignal.LOW?.wins ?? 0}/${s.bySignal.LOW?.total ?? 0}`;
+    document.getElementById('wr-new').textContent            = (s.byType.new_creation?.rate  ?? '—') + '%';
+    document.getElementById('wr-near').textContent           = (s.byType.near_completion?.rate ?? '—') + '%';
+    document.getElementById('wr-grad').textContent           = (s.byType.completed?.rate ?? '—') + '%';
+    document.getElementById('wr-sessions').textContent       = s.overall.total;
+  } catch {}
+}
+
+// ── Boot ──
+fetchData();
+loadStats();
+startCountdown();
+setInterval(fetchData, REFRESH_MS);
+setInterval(loadStats, 60_000);
+</script>
+</body>
+</html>

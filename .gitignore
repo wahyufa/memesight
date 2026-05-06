@@ -1,0 +1,47 @@
+# Environment variables
+.env
+.env.local
+
+# Scanner runtime data (JSON storage)
+data/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build output (Railway builds this)
+dist/
+
+# AI tool configs (not needed in repo)
+.agents/
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.goose/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.windsurf/
+.zencoder/
+.claude/
+skills/
+skills-lock.json

@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "routes": [
+    { "src": "/dashboard",         "dest": "/memesight.html"    },
+    { "src": "/token",             "dest": "/token.html"        },
+    { "src": "/scanner-config.js", "dest": "/scanner-config.js" },
+    { "src": "/(.*)",              "dest": "/index.html"        }
+  ]
+}

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Token Detail — MemeSight</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/scanner-config.js"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter','ui-sans-serif','system-ui','sans-serif'],
+        display: ['Outfit','ui-sans-serif','system-ui','sans-serif'],
+      },
+    }
+  }
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+  body { background:#f9fafb; color:#475569; font-family:'Inter',ui-sans-serif,system-ui,sans-serif; }
+  .font-display { font-family:'Outfit',ui-sans-serif,system-ui,sans-serif; }
+  .signal-strong { background:#dcfce7; color:#047857; border:1px solid #bbf7d0; }
+  .signal-medium { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
+  .signal-low    { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .pill          { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+  .token-page [class*="bg-[#13161f]"] { background:#fff !important; }
+  .token-page [class*="bg-[#0f1219]"] { background:#f8fafc !important; }
+  .token-page [class*="bg-[#1e2433]"] { background:#f1f5f9 !important; }
+  .token-page [class*="border-[#1e2433]"], .token-page [class*="border-[#2a3347]"] { border-color:#e2e8f0 !important; }
+  .token-page [class*="bg-amber-900"] { background:#fffbeb !important; }
+  .token-page [class*="border-amber-800"] { border-color:#fde68a !important; }
+  .token-page [class*="bg-blue-900"] { background:#eff6ff !important; }
+  .token-page [class*="border-blue-800"] { border-color:#bfdbfe !important; }
+  .token-page [class*="bg-purple-900"] { background:#0a152d !important; }
+  .token-page [class*="border-purple-800"] { border-color:#0a152d !important; }
+  .token-page [class*="text-purple-300"] { color:#fff !important; }
+  .token-page [class*="bg-emerald-900"] { background:#ecfdf5 !important; }
+  .token-page [class*="border-emerald-800"] { border-color:#bbf7d0 !important; }
+  .token-page .text-white { color:#0a1b33 !important; }
+  .token-page .text-slate-300 { color:#475569 !important; }
+  .token-page .text-slate-400 { color:#64748b !important; }
+  .token-page .text-slate-500 { color:#64748b !important; }
+  .token-page .text-slate-600 { color:#94a3b8 !important; }
+  .token-page .text-slate-700 { color:#cbd5e1 !important; }
+  ::-webkit-scrollbar { width:5px; height:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation:fadeIn .25s ease }
+</style>
+</head>
+<body class="token-page text-slate-600 min-h-screen antialiased">
+
+<!-- Header -->
+<header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm bg-[#f9fafb]/80">
+  <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center gap-4">
+    <a href="/memesight.html" class="text-slate-500 hover:text-[#0a1b33] text-sm font-semibold transition-colors flex items-center gap-1.5">
+      ← Back
+    </a>
+    <div class="h-4 w-px bg-slate-200"></div>
+    <span class="font-display text-lg font-bold text-[#0a1b33] tracking-tight">Meme<span class="text-emerald-600">Sight</span></span>
+    <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold">BETA</span>
+    <span class="text-xs text-slate-400 ml-1 hidden sm:inline">/ Token Detail</span>
+    <div class="ml-auto text-xs text-slate-400" id="lastUpdate">—</div>
+  </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-6 py-8 space-y-6 fade-in" id="main">
+  <div class="rounded-2xl border border-slate-200/60 bg-white p-10 text-center text-slate-400 shadow-sm">Loading token data…</div>
+</main>
+
+<script>
+const BASE  = (typeof window !== 'undefined' && window.SCANNER_BASE) || 'http://localhost:3000';
+const API   = BASE + '/api/state';
+const STATS = BASE + '/api/stats';
+
+const params  = new URLSearchParams(location.search);
+const ADDRESS = params.get('address') || '';
+
+if (!ADDRESS) {
+  document.getElementById('main').innerHTML = '<div class="rounded-2xl border border-slate-200/60 bg-white p-10 text-center text-red-500 shadow-sm">No address provided</div>';
+}
+
+// ── Formatters ──
+const fU = v => {
+  if (!v||isNaN(v)) return '—';
+  if (v>=1e9) return '$'+(v/1e9).toFixed(2)+'B';
+  if (v>=1e6) return '$'+(v/1e6).toFixed(2)+'M';
+  if (v>=1e3) return '$'+(v/1e3).toFixed(1)+'K';
+  return '$'+Number(v).toFixed(0);
+};
+const fP = v => {
+  if (v==null) return '—';
+  const n = parseFloat(v);
+  return n>=0.01 ? '$'+n.toFixed(4) : '$'+n.toExponential(3);
+};
+const fDur = ts => {
+  const s = Math.floor((Date.now()-ts)/1000);
+  if (s<60) return s+'s'; const m=Math.floor(s/60);
+  if (m<60) return m+'m '+(s%60)+'s';
+  return Math.floor(m/60)+'h '+(m%60)+'m';
+};
+const pct = v => v!=null ? (v*100).toFixed(0)+'%' : '—';
+
+const EXIT_WINDOWS = { extreme:['10min'], high:['10min','1hr'], medium:['1hr','4hr'], low:['4hr','12hr'] };
+const EXIT_REASONS = {
+  extreme: 'Extreme volatility — sharp reversal likely, take profits fast',
+  high:    'High momentum — price moving quickly, lock in gains early',
+  medium:  'Moderate movement — give it time to develop, watch for reversal signals',
+  low:     'Low volatility — patient hold, longer exit window acceptable',
+};
+const PROFIT_EST = {
+  STRONG: { extreme:'+80–300%', high:'+40–150%', medium:'+15–60%', low:'+5–25%' },
+  MEDIUM: { extreme:'+25–100%', high:'+12–50%',  medium:'+5–25%',  low:'+2–10%' },
+  LOW:    { extreme:'+5–30%',   high:'+3–15%',   medium:'+1–8%',   low:'minimal' },
+};
+
+const getSignal = t => {
+  if (t.action === 'BUY')   return 'STRONG';
+  if (t.action === 'WATCH') return 'MEDIUM';
+  const p = t.score && t.maxScore ? t.score/t.maxScore : 0;
+  if (p>=0.55) return 'STRONG'; if (p>=0.35) return 'MEDIUM'; return 'LOW';
+};
+const getVol = t => {
+  const g = t.gainPct??0;
+  if (g>150) return 'extreme'; if (g>60) return 'high'; if (g>20) return 'medium'; return 'low';
+};
+const curMC = t => {
+  if (!t.marketCap) return 0;
+  return t.firstOpen&&t.currentClose&&t.firstOpen>0 ? (t.currentClose/t.firstOpen)*t.marketCap : t.marketCap;
+};
+
+function typeBadge(type) {
+  if (type==='near_completion') return '<span class="text-xs font-bold px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-800/40">NEAR GRAD</span>';
+  if (type==='completed')       return '<span class="text-xs font-bold px-2 py-0.5 rounded bg-emerald-900/30 text-emerald-400 border border-emerald-800/40">GRADUATED</span>';
+  return '<span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800/40">NEW CREATION</span>';
+}
+
+function sigBadge(sig) {
+  const cls = sig==='STRONG'?'signal-strong':sig==='MEDIUM'?'signal-medium':'signal-low';
+  return `<span class="${cls} text-sm font-bold px-3 py-1 rounded-full">${sig}</span>`;
+}
+
+function scoreBar(score, max) {
+  if (score==null||!max) return '';
+  const p = score/max;
+  const col = p>=.55?'#34d399':p>=.35?'#fbbf24':p>=.2?'#e8722a':'#4a5568';
+  const lbl = p>=.55?'STRONG':p>=.35?'SIGNAL':p>=.2?'WATCH':'LOW';
+  return `<div class="flex items-center gap-3">
+    <div class="flex-1 h-2 bg-[#1e2433] rounded-full overflow-hidden">
+      <div style="width:${(p*100).toFixed(0)}%;background:${col};height:100%;border-radius:4px;transition:width .5s"></div>
+    </div>
+    <span class="text-sm font-bold" style="color:${col}">${score}/${max}</span>
+    <span class="text-xs" style="color:${col}">${lbl}</span>
+  </div>`;
+}
+
+async function load() {
+  if (!ADDRESS) return;
+  try {
+    const [stateRes, statsRes] = await Promise.all([
+      fetch(API).then(r=>r.json()),
+      fetch(STATS).then(r=>r.json()).catch(()=>null),
+    ]);
+
+    // Find token in all watchlists
+    const allTokens = [
+      ...(stateRes.watchlist||[]).map(t=>({...t,_src:'watchlist'})),
+      ...(stateRes.graduationWatch||[]).map(t=>({...t,_src:'graduation'})),
+    ];
+    const t = allTokens.find(t => t.address === ADDRESS);
+
+    document.getElementById('lastUpdate').textContent = 'Updated '+new Date().toLocaleTimeString('en-US',{hour12:false});
+
+    if (!t) {
+      document.getElementById('main').innerHTML = `
+        <div class="text-center py-24 space-y-3">
+          <div class="text-slate-400 text-lg">Token not currently on watchlist</div>
+          <div class="text-slate-600 text-sm font-mono">${ADDRESS}</div>
+          <a href="/memesight.html" class="inline-block mt-4 text-sm text-blue-500 hover:text-blue-400">← Back to dashboard</a>
+        </div>`;
+      return;
+    }
+
+    const signal  = getSignal(t);
+    const vol     = getVol(t);
+    const mc      = curMC(t);
+    const est     = PROFIT_EST[signal]?.[vol] || '—';
+    const exits   = EXIT_WINDOWS[vol] || ['1hr'];
+    const warnings = (t.reasons||[]).filter(r=>r.startsWith('⚠️'));
+    const reasons  = (t.reasons||[]).filter(r=>!r.startsWith('⚠️'));
+
+    // Win rate context for this signal tier
+    const wrCtx = statsRes?.bySignal?.[signal];
+    const wrText = wrCtx && wrCtx.total > 0
+      ? `${signal} signals: <strong class="text-white">${wrCtx.rate}%</strong> win rate (${wrCtx.wins}W / ${wrCtx.total - wrCtx.wins}L across ${wrCtx.total} tokens)`
+      : 'Not enough data yet to show historical win rate for this signal';
+
+    document.getElementById('main').innerHTML = `
+    <div class="space-y-5">
+
+      <!-- Token header -->
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6">
+        <div class="flex items-start gap-4 flex-wrap">
+          <div class="relative w-16 h-16 flex-shrink-0">
+            <img src="https://dd.dexscreener.com/ds-data/tokens/solana/${t.address}.png"
+                 class="w-16 h-16 rounded-full object-cover"
+                 onerror="this.style.display='none';this.nextSibling.style.display='flex'"/>
+            <div class="w-16 h-16 rounded-full bg-[#1e2433] border border-[#2a3347] items-center justify-center text-xl font-bold text-slate-400 uppercase absolute inset-0" style="display:none">
+              ${(t.symbol||'?').slice(0,2)}
+            </div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-3 mb-1">
+              <h1 class="text-2xl font-bold text-white">$${t.symbol}</h1>
+              ${typeBadge(t.type)}
+            </div>
+            <div class="text-slate-400 mb-2">${t.name||''}</div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono text-slate-500 cursor-pointer hover:text-slate-300 transition-colors"
+                onclick="navigator.clipboard.writeText('${t.address}')" title="Click to copy">${t.address}</span>
+              <span class="text-slate-700">·</span>
+              <span class="text-xs text-slate-600">click to copy</span>
+            </div>
+          </div>
+          <div class="flex flex-col items-end gap-2">
+            ${sigBadge(signal)}
+            <div class="text-xs text-slate-500">Est. <span class="font-semibold ${signal==='STRONG'?'text-emerald-400':signal==='MEDIUM'?'text-amber-400':'text-slate-400'}">${est}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MC row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+          <div class="text-xs text-slate-500 mb-1">Start MC</div>
+          <div class="text-xl font-bold text-slate-300">${fU(t.marketCap)}</div>
+          <div class="text-xs text-slate-600 mt-0.5">when detected</div>
+        </div>
+        <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+          <div class="text-xs text-slate-500 mb-1">MC Now</div>
+          <div class="text-xl font-bold text-white">${fU(mc)}</div>
+          ${t.gainPct!=null?`<div class="text-xs font-semibold mt-0.5 ${t.gainPct>=0?'text-emerald-400':'text-red-400'}">${t.gainPct>=0?'+':''}${t.gainPct.toFixed(2)}%</div>`:''}
+        </div>
+        <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+          <div class="text-xs text-slate-500 mb-1">Liquidity</div>
+          <div class="text-xl font-bold text-slate-300">${fU(t.liquidity)}</div>
+        </div>
+        <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+          <div class="text-xs text-slate-500 mb-1">On Watchlist</div>
+          <div class="text-xl font-bold text-slate-300">${fDur(t.addedAt)}</div>
+        </div>
+      </div>
+
+      <!-- Signal analysis -->
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-5">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Signal Analysis</h2>
+
+        <div>
+          <div class="text-xs text-slate-500 mb-2">Score</div>
+          ${scoreBar(t.score, t.maxScore)}
+        </div>
+
+        ${reasons.length ? `
+        <div>
+          <div class="text-xs text-slate-500 mb-2">Why this signal</div>
+          <div class="space-y-1.5">
+            ${reasons.map(r=>`
+              <div class="flex items-center gap-2 text-sm">
+                <span class="text-emerald-500/70 text-xs">✓</span>
+                <span class="text-slate-300">${r}</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${warnings.length ? `
+        <div class="bg-amber-900/10 border border-amber-800/30 rounded-xl p-3 space-y-1">
+          <div class="text-xs font-semibold text-amber-500 mb-1">Risk Flags</div>
+          ${warnings.map(w=>`<div class="text-xs text-amber-400/80">${w}</div>`).join('')}
+        </div>` : ''}
+
+        <!-- Raw signals -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div class="bg-[#0f1219] rounded-lg p-3">
+            <div class="text-slate-500 mb-1">Smart Money</div>
+            <div class="font-bold text-white text-base">${t.smartMoney??0}</div>
+          </div>
+          <div class="bg-[#0f1219] rounded-lg p-3">
+            <div class="text-slate-500 mb-1">KOL Wallets</div>
+            <div class="font-bold text-white text-base">${t.kol??0}</div>
+          </div>
+          <div class="bg-[#0f1219] rounded-lg p-3">
+            <div class="text-slate-500 mb-1">Rug Risk</div>
+            <div class="font-bold text-base ${(t.rugRatio??0)<0.1?'text-emerald-400':(t.rugRatio??0)<0.25?'text-amber-400':'text-red-400'}">${pct(t.rugRatio)}</div>
+          </div>
+          <div class="bg-[#0f1219] rounded-lg p-3">
+            <div class="text-slate-500 mb-1">Bundler</div>
+            <div class="font-bold text-white text-base">${pct(t.bundlerRate)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Exit recommendation -->
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-4">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Exit Recommendation</h2>
+        <div class="flex flex-wrap gap-2">
+          ${exits.map(e=>`<span class="pill text-sm font-semibold px-3 py-1.5 rounded-full">${e}</span>`).join('')}
+        </div>
+        <p class="text-slate-400 text-sm leading-relaxed">${EXIT_REASONS[vol]}</p>
+        <div class="bg-[#0f1219] rounded-xl p-3 flex items-start gap-2 text-xs text-slate-500">
+          <span>ℹ️</span>
+          <span>Exit windows are based on <strong class="text-slate-400">volatility tier (${vol})</strong> computed from current gain. Re-evaluate if market conditions change significantly.</span>
+        </div>
+      </div>
+
+      <!-- Win rate context -->
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-3">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Historical Context</h2>
+        <p class="text-sm text-slate-400">${wrText}</p>
+        ${wrCtx && wrCtx.total > 0 ? `
+        <div class="flex items-center gap-3">
+          <div class="flex-1 h-2 bg-[#1e2433] rounded-full overflow-hidden">
+            <div style="width:${wrCtx.rate}%;background:${wrCtx.rate>=50?'#34d399':wrCtx.rate>=30?'#fbbf24':'#f87171'};height:100%;border-radius:4px"></div>
+          </div>
+          <span class="text-sm font-bold text-white">${wrCtx.rate}%</span>
+        </div>
+        <p class="text-xs text-slate-600">Average gain on wins: <strong class="text-slate-400">${wrCtx.avgGain>0?'+':''}${wrCtx.avgGain}%</strong> · Avg multiple: <strong class="text-slate-400">${wrCtx.avgMult}x</strong></p>
+        ` : ''}
+        <p class="text-xs text-slate-600 mt-2">⚠️ Past performance does not guarantee future results. Not financial advice.</p>
+      </div>
+
+      <!-- Links -->
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-3">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Links</h2>
+        <div class="flex flex-wrap gap-3">
+          <a href="https://pump.fun/coin/${t.address}" target="_blank"
+             aria-label="Open on Pump.fun"
+             title="Pump.fun"
+             class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+            <img src="./src/img/pumpfun.svg" alt="" class="h-5 w-5 object-contain" loading="lazy"/>
+          </a>
+          <a href="https://gmgn.ai/sol/token/${t.address}" target="_blank"
+             aria-label="Open on GMGN"
+             title="GMGN"
+             class="inline-flex h-11 w-24 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+            <img src="./src/img/gmgn.svg" alt="" class="h-5 w-20 object-contain" loading="lazy"/>
+          </a>
+          ${t.twitter ? `<a href="${t.twitter.startsWith('http')?t.twitter.replace('twitter.com','x.com'):'https://x.com/'+t.twitter.replace('@','')}" target="_blank"
+             aria-label="Open on X"
+             title="X"
+             class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition-all shadow-sm">
+            <img src="./src/img/x.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
+          </a>` : ''}
+          ${t.telegram ? `<a href="${t.telegram}" target="_blank"
+             class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1e2433] hover:bg-[#252d3a] border border-[#2a3347] text-slate-300 font-semibold text-sm transition-all">
+            ✈️ Telegram
+          </a>` : ''}
+          <a href="https://dexscreener.com/solana/${t.address}" target="_blank"
+             aria-label="Open on DexScreener"
+             title="DexScreener"
+             class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+            <img src="./src/img/dexscreener.svg" alt="" class="h-5 w-5 object-contain" loading="lazy"/>
+          </a>
+        </div>
+      </div>
+
+    </div>`;
+
+  } catch(e) {
+    document.getElementById('main').innerHTML = `
+      <div class="text-center py-24 space-y-2">
+        <div class="text-red-400">Failed to load data — is the scanner running?</div>
+        <div class="text-slate-600 text-xs">${e.message}</div>
+      </div>`;
+  }
+}
+
+load();
+setInterval(load, 10_000);
+</script>
+</body>
+</html>

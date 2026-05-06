@@ -196,7 +196,7 @@ function computeStats() {
 // ─── GMGN CLI ────────────────────────────────────────────────────────────────
 function gmgn(args) {
   try {
-    const out = execSync(`gmgn-cli ${args} --raw`, { encoding: 'utf8', timeout: 30_000 });
+    const out = execSync(`npx gmgn-cli ${args} --raw`, { encoding: 'utf8', timeout: 30_000 });
     return JSON.parse(out.trim());
   } catch {
     return null;

@@ -1131,7 +1131,7 @@ async function scanNearCompletion() {
 }
 
 // ─── Dashboard HTTP server ────────────────────────────────────────────────────
-const DASHBOARD_PORT = process.env.DASHBOARD_PORT ? parseInt(process.env.DASHBOARD_PORT) : 3000;
+const DASHBOARD_PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000');
 
 function serializeWatchlistEntry(address, entry) {
   const gainPct = entry.firstOpen && entry.currentClose

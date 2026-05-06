@@ -6,4 +6,4 @@
  *              e.g. https://your-scanner.railway.app
  *              or   https://your-scanner.onrender.com
  */
-window.SCANNER_BASE = 'http://localhost:3000';
+window.SCANNER_BASE = window.location.origin;

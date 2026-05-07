@@ -89,10 +89,36 @@ function saveJSON(file, data) {
   try { fs.writeFileSync(file, JSON.stringify(data), 'utf8'); } catch (e) { console.error('save error:', e.message); }
 }
 
+// ─── Dedup on startup ─────────────────────────────────────────────────────────
+function dedupFile(file, keepKey) {
+  try {
+    const raw = loadJSON(file);
+    if (!raw.records?.length) return;
+    const map = new Map();
+    for (const r of raw.records) {
+      const existing = map.get(r.address);
+      if (!existing || keepKey(r) > keepKey(existing)) map.set(r.address, r);
+    }
+    const before = raw.records.length;
+    raw.records = [...map.values()].sort((a, b) => b.ts - a.ts);
+    if (raw.records.length < before) {
+      raw.updatedAt = Date.now();
+      saveJSON(file, raw);
+      console.log(`[dedup] ${path.basename(file)}: ${before} → ${raw.records.length}`);
+    }
+  } catch {}
+}
+
 const db = {
   wins:   loadJSON(WINS_FILE),
   misses: loadJSON(MISSES_FILE),
 };
+
+dedupFile(WINS_FILE,   r => r.gainMultiple ?? 0);
+dedupFile(MISSES_FILE, r => r.peakGainPct  ?? 0);
+// reload after dedup
+db.wins   = loadJSON(WINS_FILE);
+db.misses = loadJSON(MISSES_FILE);
 
 function signalTier(score, maxScore) {
   const n = (score ?? 0) / (maxScore || 10);

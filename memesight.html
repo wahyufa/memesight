@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>MemeSight</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
 <script src="/scanner-config.js"></script>
 <script>
 tailwind.config = {
@@ -18,33 +19,208 @@ tailwind.config = {
         dim:     '#64748b',
       },
       fontFamily: {
-        sans: ['Inter','ui-sans-serif','system-ui','sans-serif'],
-        display: ['Outfit','ui-sans-serif','system-ui','sans-serif'],
+        sans: ['Plus Jakarta Sans','ui-sans-serif','system-ui','sans-serif'],
+        display: ['Plus Jakarta Sans','ui-sans-serif','system-ui','sans-serif'],
       },
     }
   }
 }
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
-  body { background:#f9fafb; color:#475569; font-family:'Inter',ui-sans-serif,system-ui,sans-serif; }
-  .font-display { font-family:'Outfit',ui-sans-serif,system-ui,sans-serif; }
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+
+  /* ── Palette tokens ───────────────────────────────────────────────────── */
+  :root {
+    --bg:          #f9fafb;
+    --bg2:         #f1f5f9;
+    --surface:     #ffffff;
+    --surface2:    #f8fafc;
+    --border:      rgba(226,232,240,.7);
+    --border2:     #e2e8f0;
+    --text:        #475569;
+    --text-hi:     #0a1b33;
+    --text-dim:    #94a3b8;
+    --header-bg:   rgba(249,250,251,.88);
+  }
+  .dark {
+    --bg:          #13161f;   /* warm dark blue-grey — not pure black */
+    --bg2:         #0f1219;
+    --surface:     #1c2032;   /* elevated card surface */
+    --surface2:    #232840;   /* deeper card / hover */
+    --border:      rgba(255,255,255,.07);
+    --border2:     rgba(255,255,255,.10);
+    --text:        #9babc2;
+    --text-hi:     #e8edf5;
+    --text-dim:    #4a556a;
+    --header-bg:   rgba(19,22,31,.92);
+  }
+
+  /* ── Base ─────────────────────────────────────────────────────────────── */
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    transition: background .25s, color .25s;
+  }
+  .font-display { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
+
+  /* ── Header / status bar ──────────────────────────────────────────────── */
+  header {
+    background: var(--header-bg) !important;
+    border-color: var(--border) !important;
+  }
+  .dark header .font-display { color: var(--text-hi) !important; }
+  .dark .status-bar {
+    background: rgba(19,22,31,.6) !important;
+    border-color: var(--border) !important;
+  }
+
+  /* ── Surface cards (bg-white, bg-slate-50 etc.) ───────────────────────── */
+  .dark .ds { /* "dark surface" utility applied in JS/HTML */
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+  }
+  /* Catch all white-bg rounded cards & tables */
+  .dark [class*="bg-white"],
+  .dark [class*="bg-slate-50"] {
+    background: var(--surface) !important;
+  }
+  /* Subtle nested bg (thead, status bars) */
+  .dark [class*="bg-slate-50/80"],
+  .dark [class*="bg-white/70"] {
+    background: var(--bg2) !important;
+  }
+
+  /* ── Text colours ─────────────────────────────────────────────────────── */
+  .dark [class*="text-\[#0a1b33\]"],
+  .dark [class*="text-slate-700"],
+  .dark [class*="text-slate-900"] { color: var(--text-hi) !important; }
+  .dark [class*="text-slate-600"] { color: #7a8fa8 !important; }
+  .dark [class*="text-slate-500"] { color: #5e718a !important; }
+  .dark [class*="text-slate-400"] { color: #d9dee8 !important; }
+
+  /* ── Borders ──────────────────────────────────────────────────────────── */
+  .dark [class*="border-slate-200"],
+  .dark [class*="border-slate-100"] {
+    border-color: var(--border) !important;
+  }
+  .dark [class*="divide-slate"] > * + * { border-color: var(--border) !important; }
+
+  /* ── Signal badges ────────────────────────────────────────────────────── */
   .signal-strong { background:#dcfce7; color:#047857; border:1px solid #bbf7d0; }
   .signal-medium { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
   .signal-low    { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
-  .pill-exit { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
-  .card-strong { border-color:#bbf7d0; box-shadow:0 14px 35px -28px rgba(16,185,129,.7); }
-  .card-medium { border-color:#fde68a; }
-  .card-low    { border-color:#e2e8f0; }
-  .row-hover:hover { background:#f8fafc; }
-  .sort-active { color:#059669; }
+  .dark .signal-strong { background:rgba(5,46,22,.8);  color:#4ade80; border-color:rgba(22,101,52,.8); }
+  .dark .signal-medium { background:rgba(69,26,3,.8);  color:#fbbf24; border-color:rgba(146,64,14,.7); }
+  .dark .signal-low    { background:rgba(30,41,59,.6);  color:#7a90aa; border-color:rgba(51,65,85,.8); }
+
+  /* ── Top 5 performer cards ────────────────────────────────────────────── */
+  .dark #top5Container a,
+  .dark #top5Container div[class*="bg-white"] {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+  }
+  .dark #top5Container .ring-2 { --tw-ring-color: rgba(251,191,36,.35) !important; }
+  .dark #top5Container .border-t { border-color: var(--border) !important; }
+
+  /* ── Win rate bar ─────────────────────────────────────────────────────── */
+  .dark #winRateBar { background: var(--surface) !important; border-color: var(--border) !important; }
+  .dark #winRateBar .bg-slate-200,
+  .dark #winRateBar [class*="bg-slate-200"] { background: var(--border2) !important; }
+  .dark #winRateBar #winHistoryTable { border-color: var(--border) !important; }
+
+  /* ── Filter pills ─────────────────────────────────────────────────────── */
+  .dark .filter-btn,
+  .dark .time-btn {
+    border-color: var(--border2) !important;
+    color: var(--text) !important;
+    background: transparent !important;
+  }
+  .dark .filter-btn.active,
+  .dark .time-btn.active {
+    background: var(--surface2) !important;
+    border-color: rgba(255,255,255,.18) !important;
+    color: var(--text-hi) !important;
+  }
+  .dark .filter-btn:hover,
+  .dark .time-btn:hover {
+    background: var(--surface) !important;
+    color: var(--text-hi) !important;
+  }
+
+  /* ── Legend button ────────────────────────────────────────────────────── */
+  .dark #legendOverlay > div { background: var(--surface) !important; border-color: var(--border2) !important; }
+
+  /* ── Watchlist table ──────────────────────────────────────────────────── */
+  .dark .watchlist-table,
+  .dark .watchlist-table table { background: var(--surface) !important; }
+  .dark .watchlist-table thead tr { background: var(--bg2) !important; }
+  .dark .row-hover:hover { background: var(--surface2) !important; }
+  .dark [class*="border-slate-200/70"] { border-color: var(--border) !important; }
+
+  /* ── Link buttons (pump.fun, gmgn) — fix white icon on white bg ───────── */
+  .dark a[class*="bg-white"][class*="rounded-full"],
+  .dark a[class*="bg-white"][class*="rounded-xl"] {
+    background: var(--surface2) !important;
+    border-color: var(--border2) !important;
+  }
+  .dark a[class*="bg-white"][class*="rounded-full"]:hover,
+  .dark a[class*="bg-white"][class*="rounded-xl"]:hover {
+    background: rgba(255,255,255,.12) !important;
+  }
+  /* invert only x/dexscreener logos in dark — keep pumpfun & gmgn original */
+  .dark a[class*="rounded-full"] img[src*="dexscreener"],
+  .dark a[class*="rounded-xl"]   img[src*="dexscreener"],
+  .dark a[class*="rounded-full"] img[src*="x.svg"],
+  .dark a[class*="rounded-xl"]   img[src*="x.svg"] { filter: invert(1) !important; }
+
+  /* ── Mobile cards ─────────────────────────────────────────────────────── */
+  .dark #watchlistCards > div {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+  }
+  .dark #watchlistCards [class*="bg-slate-50"] {
+    background: var(--bg2) !important;
+  }
+
+  /* ── Miss section ─────────────────────────────────────────────────────── */
+  .dark #missSection [class*="bg-white"],
+  .dark #missSection table { background: var(--surface) !important; }
+
+  /* ── Win history ──────────────────────────────────────────────────────── */
+  .dark #winHistoryTable { background: var(--surface) !important; }
+
+  /* ── Scrollbar ────────────────────────────────────────────────────────── */
   ::-webkit-scrollbar { width:5px; height:5px; }
-  ::-webkit-scrollbar-track { background:transparent; }
-  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  .dark ::-webkit-scrollbar-thumb { background: #2a3347; }
+
+  /* ── Misc ─────────────────────────────────────────────────────────────── */
+  .pill-exit { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+  .card-strong { border-color:#bbf7d0; box-shadow:0 14px 35px -28px rgba(16,185,129,.5); }
+  .dark .card-strong { border-color:rgba(22,101,52,.6) !important; box-shadow:0 0 0 1px rgba(74,222,128,.12), 0 14px 35px -20px rgba(74,222,128,.12) !important; }
+  .card-medium { border-color:#fde68a; }
+  .dark .card-medium { border-color:rgba(146,64,14,.5) !important; }
+  .card-low    { border-color:#e2e8f0; }
+  .dark .card-low { border-color:var(--border) !important; }
+  .sort-active { color:#059669; }
   .modal-overlay { background:rgba(0,0,0,.7); backdrop-filter:blur(4px); }
   @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
   .fade-in { animation:fadeIn .2s ease; }
-  .glow-green { text-shadow:0 0 12px rgba(16,185,129,.25); }
+  @keyframes newPulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+  .badge-new {
+    display:inline-flex; align-items:center;
+    font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    padding:1px 5px; border-radius:99px;
+    background:rgba(16,185,129,.12); color:#059669; border:1px solid rgba(16,185,129,.3);
+    animation: newPulse 2s ease-in-out infinite;
+  }
+  .dark .badge-new { background:rgba(16,185,129,.15); color:#34d399; border-color:rgba(16,185,129,.25); }
+
+  /* ── Mobile ───────────────────────────────────────────────────────────── */
+  @media(max-width:767px) { .watchlist-table{display:none} .watchlist-cards{display:block} }
+  @media(min-width:768px) { .watchlist-table{display:block} .watchlist-cards{display:none} }
 </style>
 </head>
 <body class="text-slate-600 min-h-screen antialiased">
@@ -56,20 +232,26 @@ tailwind.config = {
       <span class="font-display text-lg font-bold text-[#0a1b33] tracking-tight">Meme<span class="text-emerald-600">Sight</span></span>
       <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold">BETA</span>
     </div>
-    <div class="flex items-center gap-5">
+    <div class="flex items-center gap-3">
       <div class="text-right hidden sm:block">
-        <div class="text-xs text-slate-500">Refreshes in</div>
+        <div class="text-xs text-slate-500 dark:text-slate-600">Refreshes in</div>
         <div class="text-sm font-mono font-bold text-emerald-400" id="countdown">5:00</div>
       </div>
-      <button class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#0a152d] text-white text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
-        Connect Wallet
+      <!-- Dark mode toggle -->
+      <button id="darkBtn" onclick="toggleDark()"
+        title="Toggle dark mode"
+        class="w-9 h-9 rounded-full flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
+        <i class="ph ph-moon" style="font-size:15px" id="darkIcon"></i>
       </button>
+      <a href="/memesight" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
+        Dashboard
+      </a>
     </div>
   </div>
 </header>
 
 <!-- ─── Status bar ──────────────────────────────────────────────────────── -->
-<div class="border-b border-slate-200/60 bg-white/70">
+<div class="status-bar border-b border-slate-200/60 bg-white/70">
   <div class="max-w-[1400px] mx-auto px-6 py-2 flex items-center gap-5 text-xs text-slate-500">
     <div class="flex items-center gap-1.5">
       <div class="w-1.5 h-1.5 rounded-full bg-emerald-400" id="apiDot" style="box-shadow:0 0 5px #34d399"></div>
@@ -134,18 +316,18 @@ tailwind.config = {
         </button>
       </div>
     </div>
-    <div id="winHistoryTable" class="hidden border-t border-slate-200/70 overflow-x-auto">
+    <div id="winHistoryTable" class="hidden border-t border-slate-200/70 dark:border-[#2a2d3a] overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
-          <tr class="text-xs uppercase tracking-wider text-slate-500 bg-slate-50/80">
+          <tr class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-600 bg-slate-50/80 dark:bg-[#0f1117]/50">
             <th class="px-4 py-3 text-left">Token</th>
-            <th class="px-4 py-3 text-left">Signal</th>
-            <th class="px-4 py-3 text-left">Type</th>
-            <th class="px-4 py-3 text-left">Entry MC</th>
-            <th class="px-4 py-3 text-left">Peak MC</th>
-            <th class="px-4 py-3 text-left">Gain</th>
-            <th class="px-4 py-3 text-left">Duration</th>
-            <th class="px-4 py-3 text-left">Called</th>
+            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="signal">Signal <span class="wh-arrow hidden">↑</span></th>
+            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="type">Type <span class="wh-arrow hidden">↑</span></th>
+            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="entryMC">Entry MC <span class="wh-arrow hidden">↑</span></th>
+            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="peakMC">Peak MC <span class="wh-arrow hidden">↑</span></th>
+            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="gainMultiple">Gain <span class="wh-arrow sort-active">↓</span></th>
+            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="durationMs">Duration <span class="wh-arrow hidden">↑</span></th>
+            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="ts">Called <span class="wh-arrow hidden">↑</span></th>
           </tr>
         </thead>
         <tbody id="winHistoryBody">
@@ -159,8 +341,8 @@ tailwind.config = {
   <section>
     <div class="flex items-center gap-3 mb-4">
       <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500">Top 5 Performers</h2>
-      <div class="flex-1 h-px bg-slate-200/80"></div>
-      <span class="text-xs text-slate-400">ranked by signal strength + market cap</span>
+      <div class="flex-1 h-px bg-slate-200/25"></div>
+      <span class="text-xs text-slate-400">all-time best calls · ranked by peak gain</span>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4" id="top5Container">
       <!-- cards injected here -->
@@ -172,52 +354,135 @@ tailwind.config = {
   <section>
     <div class="flex items-center gap-3 mb-4">
       <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500">Watchlist</h2>
-      <div class="flex-1 h-px bg-slate-200/80"></div>
+      <div class="flex-1 h-px bg-slate-200/25"></div>
       <span class="text-xs text-slate-400" id="watchlistMeta">—</span>
     </div>
 
     <!-- Filter pills -->
-    <div class="flex flex-col gap-2 mb-4">
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs text-slate-500 w-10">Signal:</span>
-        <button class="filter-btn active text-xs px-3 py-1 rounded-full border transition-all" data-filter="all">All</button>
-        <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="STRONG">🟢 STRONG</button>
-        <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="MEDIUM">🟡 MEDIUM</button>
-        <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="LOW">⚪ LOW</button>
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs text-slate-500 w-10">Signal:</span>
+          <button class="filter-btn active text-xs px-3 py-1 rounded-full border transition-all" data-filter="all">All</button>
+          <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="STRONG">🟢 STRONG</button>
+          <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="MEDIUM">🟡 MEDIUM</button>
+          <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="LOW">⚪ LOW</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs text-slate-500 w-10">Called:</span>
+          <button class="time-btn active text-xs px-3 py-1 rounded-full border transition-all" data-time="0">All time</button>
+          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="5">Last 5m</button>
+          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="30">Last 30m</button>
+          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="60">Last 1h</button>
+          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="360">Last 6h</button>
+          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="1440">Last 24h</button>
+        </div>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs text-slate-500 w-10">Called:</span>
-        <button class="time-btn active text-xs px-3 py-1 rounded-full border transition-all" data-time="0">All time</button>
-        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="5">Last 5m</button>
-        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="30">Last 30m</button>
-        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="60">Last 1h</button>
-        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="360">Last 6h</button>
-        <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="1440">Last 24h</button>
+      <div class="flex-shrink-0 flex items-center gap-2">
+        <button id="notifBtn" onclick="toggleNotifications()"
+          title="Enable alerts"
+          class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-full transition-all">
+          <i class="ph ph-bell" style="font-size:14px"></i>
+          Alerts
+        </button>
+        <button onclick="openLegend()" class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-full transition-all">
+          <i class="ph ph-question" style="font-size:14px"></i>
+          Legend
+        </button>
       </div>
     </div>
 
-    <div class="rounded-2xl border border-slate-200/60 bg-white overflow-hidden shadow-sm">
+    <!-- Legend popup -->
+    <div id="legendOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm hidden" onclick="if(event.target===this)closeLegend()">
+      <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-[#0a1b33] text-base">Table Legend</h3>
+          <button onclick="closeLegend()" class="text-slate-400 hover:text-slate-600 transition-colors text-xl leading-none">×</button>
+        </div>
+        <div class="space-y-3 text-sm">
+          <div class="grid grid-cols-[130px_1fr] gap-x-4 gap-y-3">
+            <span class="font-semibold text-slate-700">Start MC</span>
+            <span class="text-slate-500">Market cap at the moment the scanner first detected the token.</span>
+            <span class="font-semibold text-slate-700">MC Now</span>
+            <span class="text-slate-500">Current market cap. The percentage below shows change from Start MC.</span>
+            <span class="font-semibold text-slate-700">Peak MC</span>
+            <span class="text-slate-500">Highest market cap reached since the token was added to this session's watchlist.</span>
+            <span class="font-semibold text-slate-700">Signal</span>
+            <span class="text-slate-500"><strong class="text-emerald-600">STRONG</strong> / <strong class="text-amber-600">MEDIUM</strong> / <strong class="text-slate-400">LOW</strong> — scored from Smart Money count, KOL wallets, rug ratio, and graduation speed.</span>
+            <span class="font-semibold text-slate-700">Est. Profit</span>
+            <span class="text-slate-500">Estimated upside range based on signal tier and token volatility.</span>
+            <span class="font-semibold text-slate-700">Smart Money (SM)</span>
+            <span class="text-slate-500">Number of known profitable wallets already holding this token. Higher = stronger conviction.</span>
+            <span class="font-semibold text-slate-700">KOL</span>
+            <span class="text-slate-500">Key Opinion Leader wallets — crypto influencers with a position in this token.</span>
+            <span class="font-semibold text-slate-700">Grad speed</span>
+            <span class="text-slate-500">How fast the token filled its bonding curve. Faster graduation = strong launch demand.</span>
+            <span class="font-semibold text-slate-700">Win</span>
+            <span class="text-slate-500">A token is counted as a win when it gains ≥50% from its entry price.</span>
+          </div>
+        </div>
+        <div class="pt-2 border-t border-slate-100 text-xs text-slate-400">⚠️ Not financial advice — DYOR.</div>
+      </div>
+    </div>
+
+    <!-- Desktop table -->
+    <div class="watchlist-table rounded-2xl border border-slate-200/60 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] overflow-hidden shadow-sm">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-slate-200/70 text-xs uppercase tracking-wider text-slate-500 bg-slate-50/80">
+            <tr class="border-b border-slate-200/70 dark:border-[#2a2d3a] text-xs uppercase tracking-wider text-slate-500 dark:text-slate-600 bg-slate-50/80 dark:bg-[#0f1117]/50">
               <th class="px-4 py-3 text-left w-8">#</th>
               <th class="px-4 py-3 text-left">Token</th>
-              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] transition-colors select-none" id="thMC">
-                Start MC / Called <span id="mcSort" class="sort-active">↑</span>
+              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] dark:hover:text-white transition-colors select-none" id="thCalled">
+                Called <span id="calledSort" class="hidden">↑</span>
               </th>
-              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] transition-colors select-none" id="thMCNow">
+              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] dark:hover:text-white transition-colors select-none" id="thMC">
+                Start MC <span id="mcSort" class="sort-active">↑</span>
+              </th>
+              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] dark:hover:text-white transition-colors select-none" id="thMCNow">
                 MC Now <span id="mcNowSort" class="hidden">↑</span>
               </th>
-              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] transition-colors select-none" id="thSignal">
+              <th class="px-4 py-3 text-left">Peak MC</th>
+              <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] dark:hover:text-white transition-colors select-none" id="thSignal">
                 Signal + Est. Profit <span id="sigSort" class="hidden">↓</span>
               </th>
-              <th class="px-4 py-3 text-left">Exit + Reason</th>
               <th class="px-4 py-3 text-left">Links</th>
             </tr>
           </thead>
           <tbody id="watchlistBody">
             <tr><td colspan="7" class="text-center py-16 text-slate-400">Loading watchlist…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Mobile cards -->
+    <div class="watchlist-cards space-y-3" id="watchlistCards">
+      <div class="text-center py-16 text-slate-400 text-sm">Loading watchlist…</div>
+    </div>
+  </section>
+
+  <!-- ─── Miss Analysis ─────────────────────────────────────────────────────── -->
+  <section id="missSection" class="hidden">
+    <div class="flex items-center gap-3 mb-4">
+      <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-600">Near-Misses</h2>
+      <div class="flex-1 h-px bg-slate-200/25 dark:bg-[#2a2d3a]"></div>
+      <span class="text-xs text-slate-400">tokens that expired without hitting target · sorted by peak gain</span>
+    </div>
+    <div class="rounded-2xl border border-slate-200/60 dark:border-[#2a2d3a] bg-white dark:bg-[#1a1d27] overflow-hidden shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200/70 dark:border-[#2a2d3a] text-xs uppercase tracking-wider text-slate-500 dark:text-slate-600 bg-slate-50/80 dark:bg-[#0f1117]/50">
+              <th class="px-4 py-3 text-left">Token</th>
+              <th class="px-4 py-3 text-left">Signal</th>
+              <th class="px-4 py-3 text-left">Type</th>
+              <th class="px-4 py-3 text-left">Entry MC</th>
+              <th class="px-4 py-3 text-left">Peak Gain</th>
+            </tr>
+          </thead>
+          <tbody id="missBody">
+            <tr><td colspan="5" class="text-center py-10 text-slate-400">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -385,6 +650,7 @@ const mapToken = (t, migratedFlag) => {
     twitter:      t.twitter,
     telegram:     t.telegram,
     createdAt:    t.createdAt || null,
+    peakMC:       t.peakMC || null,
   };
 };
 
@@ -477,11 +743,19 @@ function getWatchlist() {
     });
 }
 
-function getTop5(watchlist) {
-  const rank = { STRONG:3, MEDIUM:2, LOW:1 };
-  return [...watchlist]
-    .sort((a, b) => rank[b.buy_signal] - rank[a.buy_signal] || b.market_cap - a.market_cap)
-    .slice(0, 5);
+let allTimeTop5 = [];
+let allWinsMap  = new Map(); // address → win record
+
+async function loadTop5() {
+  try {
+    const { wins } = await fetch(BASE + '/api/wins').then(r => r.json());
+    if (!wins || !wins.length) return;
+    allWinsMap  = new Map(wins.map(w => [w.address, w]));
+    allTimeTop5 = [...wins]
+      .sort((a, b) => b.gainMultiple - a.gainMultiple)
+      .slice(0, 5);
+    renderTop5(allTimeTop5);
+  } catch {}
 }
 
 // ── Signal badge HTML ──
@@ -515,15 +789,15 @@ const buyLinks = contract =>
        aria-label="Open on Pump.fun"
        title="Pump.fun"
        rel="noopener noreferrer"
-       class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+       class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
       <img src="./src/img/pumpfun.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
     </a>
     <a href="https://gmgn.ai/sol/token/${contract}" target="_blank"
        aria-label="Open on GMGN"
        title="GMGN"
        rel="noopener noreferrer"
-       class="inline-flex h-8 w-16 items-center justify-center rounded-full bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
-      <img src="./src/img/gmgn.svg" alt="" class="h-4 w-12 object-contain" loading="lazy"/>
+       class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+      <img src="./src/img/gmgn.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
     </a>
   </div>` :
   `<span class="text-xs text-slate-400">Address unavailable</span>`;
@@ -532,63 +806,41 @@ const buyLinks = contract =>
 function renderTop5(list) {
   const container = document.getElementById('top5Container');
   if (!list.length) {
-    container.innerHTML = '<p class="text-slate-400 text-sm py-8 w-full text-center">No migrated tokens yet. Waiting for data…</p>';
+    container.innerHTML = '<p class="text-slate-400 text-sm py-8 col-span-5 text-center">No wins recorded yet.</p>';
     return;
   }
-  container.innerHTML = list.map(c => {
-    const cardCls  = c.buy_signal === 'STRONG' ? 'card-strong' : c.buy_signal === 'MEDIUM' ? 'card-medium' : 'card-low';
-    const est      = getProfitEst(c.buy_signal, c.volatility);
-    const reasons  = getSignalReasons(c).slice(0, 2);
-    const warnings = getWarnings(c);
+  container.innerHTML = list.map((w, i) => {
+    const mult     = w.gainMultiple ?? 1;
+    const multDisp = mult >= 10 ? mult.toFixed(0) : mult.toFixed(1);
+    const pct      = w.gainPct != null ? `+${w.gainPct.toFixed(0)}%` : `+${((mult - 1) * 100).toFixed(0)}%`;
+    const rankCls  = i === 0 ? 'ring-2 ring-amber-400/60' : '';
+    const href     = w.address ? `/token?address=${encodeURIComponent(w.address)}` : '#';
     return `
-      <div class="bg-white border rounded-2xl p-4 ${cardCls} flex flex-col gap-3 shadow-sm">
+      <a href="${href}" target="_blank" rel="noopener noreferrer" class="block bg-white border rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all ${rankCls}">
         <div class="flex items-center gap-2.5">
-          ${logoHtml(c.contract, c.ticker, 9)}
+          ${logoHtml(w.address, w.symbol, 9)}
           <div class="min-w-0">
-            <div class="font-bold text-[#0a1b33] text-sm">$${c.ticker}</div>
-            <div class="text-xs text-slate-500 truncate">${c.name}</div>
+            <div class="font-bold text-[#0a1b33] text-sm truncate">$${w.symbol}</div>
+            <div class="text-xs text-slate-400 truncate">${w.name ?? w.symbol}</div>
           </div>
         </div>
 
-        <div class="flex items-center justify-between">
-          ${sigBadge(c.buy_signal)}
-          <span class="text-xs font-semibold ${c.buy_signal === 'STRONG' ? 'text-emerald-400' : c.buy_signal === 'MEDIUM' ? 'text-amber-400' : 'text-slate-500'}">${est}</span>
+        <div class="text-center py-1">
+          <div class="text-2xl font-extrabold text-emerald-500 leading-none">${multDisp}x</div>
+          <div class="text-xs text-emerald-400 mt-0.5">${pct}</div>
         </div>
 
-        <div class="space-y-1">
-          ${reasons.map(r => `<div class="text-xs text-slate-500 flex items-center gap-1"><span class="text-slate-600">·</span>${r}</div>`).join('')}
-          ${warnings.map(w => `<div class="text-xs text-amber-500/80 flex items-center gap-1">${w}</div>`).join('')}
-        </div>
-
-        <div class="space-y-1.5 text-xs border-t border-slate-200/70 pt-2.5">
+        <div class="space-y-1 text-xs border-t border-slate-100 pt-2.5">
           <div class="flex justify-between">
-            <span class="text-slate-500">Start MC</span>
-            <span class="text-[#0a1b33] font-semibold">${fmtUSD(c.start_mc)}</span>
+            <span class="text-slate-400">Start MC</span>
+            <span class="font-semibold text-[#0a1b33]">${fmtUSD(w.entryMC)}</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-slate-500">Called</span>
-            <span class="text-slate-600">${c.called_at ? `${fmtCallTime(c.called_at)} | ${timeAgo(c.called_at)}` : c.last_updated}</span>
-          </div>
-          ${tokenAgeStr(c.createdAt) ? `<div class="flex justify-between">
-            <span class="text-slate-500">Token Age</span>
-            <span class="text-slate-500 font-mono text-xs">${tokenAgeStr(c.createdAt)}</span>
-          </div>` : ''}
-          <div class="flex justify-between">
-            <span class="text-slate-500">MC Now</span>
-            <span class="text-[#0a1b33] font-semibold">${fmtUSD(c.market_cap)}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Exit</span>
-            <div class="flex gap-1">${exitPills(c.volatility)}</div>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Why exit?</span>
-            <span class="text-slate-600 text-right max-w-[130px] leading-tight">${EXIT_REASONS[c.volatility].split('—')[0].trim()}</span>
+            <span class="text-slate-400">Peak MC</span>
+            <span class="font-semibold text-emerald-600">${fmtUSD(w.peakMC)}</span>
           </div>
         </div>
-
-        ${buyLinks(c.contract)}
-      </div>`;
+      </a>`;
   }).join('');
 }
 
@@ -612,61 +864,66 @@ function renderWatchlist(list) {
     const exitNote = EXIT_REASONS[c.volatility] || '';
     return `
     <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors">
-      <td class="px-4 py-3.5 text-slate-400 text-xs">${i + 1}</td>
+      <td class="px-3 py-2.5 text-slate-400 text-xs">${i + 1}</td>
 
       <!-- Token -->
-      <td class="px-4 py-3.5">
-        <div class="flex items-center gap-3">
-          ${logoHtml(c.contract, c.ticker, 9)}
+      <td class="px-3 py-2.5">
+        <div class="flex items-center gap-2.5">
+          ${logoHtml(c.contract, c.ticker, 8)}
           <div>
-            <div class="font-semibold text-[#0a1b33] text-sm">$${c.ticker}</div>
-            <div class="text-xs text-slate-500 max-w-[150px] truncate">${c.name}</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              ${c.contract ? `<span class="text-xs font-mono text-slate-600 cursor-pointer hover:text-slate-400 transition-colors"
-                onclick="navigator.clipboard.writeText('${c.contract}')" title="Click to copy">${truncAddr(c.contract)}</span>
-              <a href="/token.html?address=${encodeURIComponent(c.contract)}" target="_blank"
-                rel="noopener noreferrer"
-                class="text-xs text-blue-500/60 hover:text-blue-400 transition-colors">Detail →</a>` : `<span class="text-xs text-red-400">Missing full token address</span>`}
+            <div class="flex items-center gap-1.5">
+              <span class="font-semibold text-[#0a1b33] text-sm">$${c.ticker}</span>
+              ${isNew(c) ? '<span class="badge-new">new</span>' : ''}
             </div>
-            ${tokenAgeStr(c.createdAt) ? `<div class="text-xs text-slate-400 mt-0.5">🕐 ${tokenAgeStr(c.createdAt)}</div>` : ''}
+            <div class="flex items-center gap-2">
+              ${c.contract ? `<span class="text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
+                onclick="navigator.clipboard.writeText('${c.contract}')" title="Click to copy">${truncAddr(c.contract)}</span>
+              <a href="/token?address=${encodeURIComponent(c.contract)}" target="_blank"
+                rel="noopener noreferrer"
+                class="text-xs text-blue-500/60 hover:text-blue-400 transition-colors">Detail →</a>` : ''}
+            </div>
           </div>
         </div>
       </td>
 
+      <!-- Called -->
+      <td class="px-3 py-2.5">
+        <div class="text-sm text-slate-500">${c.called_at ? timeAgo(c.called_at) : '—'}</div>
+      </td>
+
       <!-- Start MC -->
-      <td class="px-4 py-3.5">
-        <div class="text-slate-500 text-sm">${fmtUSD(c.start_mc)}</div>
-        <div class="text-xs text-slate-600 mt-0.5">${c.called_at ? `called ${fmtCallTime(c.called_at)}` : 'call time unknown'}</div>
-        <div class="text-xs text-slate-400">${c.called_at ? timeAgo(c.called_at) : c.last_updated}</div>
+      <td class="px-3 py-2.5">
+        <div class="text-sm text-slate-600">${fmtUSD(c.start_mc)}</div>
       </td>
 
       <!-- MC Now -->
-      <td class="px-4 py-3.5">
-        <div class="font-semibold text-[#0a1b33]">${fmtUSD(c.market_cap)}</div>
-        ${c.gainPct != null ? `<div class="text-xs ${c.gainPct >= 0 ? 'text-emerald-400' : 'text-red-400'}">${c.gainPct >= 0 ? '+' : ''}${c.gainPct.toFixed(1)}%</div>` : ''}
+      <td class="px-3 py-2.5">
+        <div class="font-semibold text-[#0a1b33] text-sm">${fmtUSD(c.market_cap)}</div>
+        ${c.gainPct != null ? `<div class="text-xs ${c.gainPct >= 0 ? 'text-emerald-500' : 'text-red-400'}">${c.gainPct >= 0 ? '+' : ''}${c.gainPct.toFixed(1)}%</div>` : ''}
       </td>
 
-      <!-- Signal + reasons + profit est -->
-      <td class="px-4 py-3.5" style="min-width:200px">
-        <div class="flex items-center gap-2 mb-1.5">
+      <!-- Peak MC -->
+      <td class="px-3 py-2.5">
+        ${c.peakMC && c.start_mc
+          ? `<div class="font-semibold text-emerald-600 text-sm">${fmtUSD(c.peakMC)}</div>
+             <div class="text-xs text-emerald-500">+${(((c.peakMC - c.start_mc) / c.start_mc) * 100).toFixed(1)}%</div>`
+          : `<div class="text-slate-400 text-sm">—</div>`}
+      </td>
+
+      <!-- Signal -->
+      <td class="px-3 py-2.5" style="min-width:160px">
+        <div class="flex items-center gap-2 mb-1">
           ${sigBadge(c.buy_signal)}
-          <span class="text-xs font-semibold ${c.buy_signal === 'STRONG' ? 'text-emerald-400' : c.buy_signal === 'MEDIUM' ? 'text-amber-400' : 'text-slate-500'}">${est}</span>
+          <span class="text-xs font-semibold ${c.buy_signal === 'STRONG' ? 'text-emerald-400' : c.buy_signal === 'MEDIUM' ? 'text-amber-400' : 'text-slate-400'}">${est}</span>
         </div>
         <div class="space-y-0.5">
-          ${reasons.map(r => `<div class="text-xs text-slate-500 flex items-start gap-1"><span class="text-slate-700 mt-0.5">·</span><span>${r}</span></div>`).join('')}
-          ${warnings.map(w => `<div class="text-xs text-amber-600/80">${w}</div>`).join('')}
+          ${reasons.slice(0, 2).map(r => `<div class="text-xs text-slate-400 flex items-start gap-1"><span class="text-slate-500">·</span><span>${r}</span></div>`).join('')}
+          ${warnings.map(w => `<div class="text-xs text-amber-500/80">${w}</div>`).join('')}
         </div>
       </td>
 
-      <!-- Exit + reason -->
-      <td class="px-4 py-3.5" style="min-width:180px">
-        <div class="flex flex-wrap gap-1 mb-1.5">${exitPills(c.volatility)}</div>
-        <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">from call</div>
-        <div class="text-xs text-slate-600 leading-tight">${exitNote}</div>
-      </td>
-
-      <!-- Direct links -->
-      <td class="px-4 py-3.5">${buyLinks(c.contract)}</td>
+      <!-- Links -->
+      <td class="px-3 py-2.5">${buyLinks(c.contract)}</td>
     </tr>`;
   }).join('');
 }
@@ -674,36 +931,39 @@ function renderWatchlist(list) {
 // ── Main render ──
 function render() {
   const watchlist = getWatchlist();
-  const top5      = getTop5(watchlist);
-  renderTop5(top5);
   renderWatchlist(watchlist);
 }
 
 // ── Sort ──
+const sortIndicators = ['mcSort','calledSort','mcNowSort','sigSort'];
+function resetSortIndicators() { sortIndicators.forEach(id => { document.getElementById(id).className = 'hidden'; }); }
+
 document.getElementById('thMC').addEventListener('click', () => {
-  if (sortKey === 'start_mc') sortDir *= -1;
-  else { sortKey = 'start_mc'; sortDir = 1; }
-  document.getElementById('mcSort').textContent    = sortDir === 1 ? '↑' : '↓';
-  document.getElementById('mcSort').className      = 'sort-active';
-  document.getElementById('mcNowSort').className   = 'hidden';
-  document.getElementById('sigSort').className     = 'hidden';
+  if (sortKey === 'start_mc') sortDir *= -1; else { sortKey = 'start_mc'; sortDir = 1; }
+  resetSortIndicators();
+  document.getElementById('mcSort').textContent = sortDir === 1 ? '↑' : '↓';
+  document.getElementById('mcSort').className   = 'sort-active';
+  render();
+});
+document.getElementById('thCalled').addEventListener('click', () => {
+  if (sortKey === 'called_at') sortDir *= -1; else { sortKey = 'called_at'; sortDir = -1; }
+  resetSortIndicators();
+  document.getElementById('calledSort').textContent = sortDir === 1 ? '↑' : '↓';
+  document.getElementById('calledSort').className   = 'sort-active';
   render();
 });
 document.getElementById('thMCNow').addEventListener('click', () => {
-  if (sortKey === 'market_cap') sortDir *= -1;
-  else { sortKey = 'market_cap'; sortDir = 1; }
+  if (sortKey === 'market_cap') sortDir *= -1; else { sortKey = 'market_cap'; sortDir = 1; }
+  resetSortIndicators();
   document.getElementById('mcNowSort').textContent = sortDir === 1 ? '↑' : '↓';
   document.getElementById('mcNowSort').className   = 'sort-active';
-  document.getElementById('mcSort').className      = 'hidden';
-  document.getElementById('sigSort').className     = 'hidden';
   render();
 });
 document.getElementById('thSignal').addEventListener('click', () => {
-  if (sortKey === 'buy_signal') sortDir *= -1;
-  else { sortKey = 'buy_signal'; sortDir = 1; }
+  if (sortKey === 'buy_signal') sortDir *= -1; else { sortKey = 'buy_signal'; sortDir = 1; }
+  resetSortIndicators();
   document.getElementById('sigSort').textContent = sortDir === 1 ? '↓' : '↑';
   document.getElementById('sigSort').className   = 'sort-active';
-  document.getElementById('mcSort').className    = 'hidden';
   render();
 });
 
@@ -816,37 +1076,76 @@ const fmtDuration = ms => {
 let winHistoryOpen = false;
 let winHistoryLoaded = false;
 
+let whData = [];
+let whSortKey = 'gainMultiple';
+let whSortDir = -1; // -1 = desc
+
+function renderWinHistory() {
+  const body = document.getElementById('winHistoryBody');
+  const sigRank = { STRONG: 3, MEDIUM: 2, LOW: 1 };
+  const sorted = [...whData].sort((a, b) => {
+    const av = whSortKey === 'signal' ? (sigRank[a.signal] ?? 0) : (a[whSortKey] ?? 0);
+    const bv = whSortKey === 'signal' ? (sigRank[b.signal] ?? 0) : (b[whSortKey] ?? 0);
+    if (typeof av === 'string') return whSortDir * av.localeCompare(bv);
+    return whSortDir * (bv - av);
+  });
+
+  body.innerHTML = sorted.map(w => {
+    const sig    = w.signal || '—';
+    const sigCls = sig === 'STRONG' ? 'signal-strong' : sig === 'MEDIUM' ? 'signal-medium' : 'signal-low';
+    const pos    = w.gainPct >= 0;
+    return `
+    <tr class="row-hover border-b border-slate-200/70 dark:border-[#2a2d3a] last:border-0 transition-colors">
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-2">
+          ${logoHtml(w.address, w.symbol, 7)}
+          <div>
+            <div class="font-semibold text-[#0a1b33] dark:text-white text-sm">$${w.symbol}</div>
+            ${w.address ? `<a href="/token?address=${encodeURIComponent(w.address)}" target="_blank"
+              class="text-xs font-mono text-slate-400 hover:text-blue-400 transition-colors">${w.address.slice(0,6)}…${w.address.slice(-4)}</a>` : ''}
+          </div>
+        </div>
+      </td>
+      <td class="px-4 py-3"><span class="${sigCls} text-xs font-bold px-2.5 py-1 rounded-full">${sig}</span></td>
+      <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">${TYPE_LABEL[w.type] || w.type || '—'}</td>
+      <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">${fmtUSD(w.entryMC)}</td>
+      <td class="px-4 py-3 text-sm font-semibold text-[#0a1b33] dark:text-white">${fmtUSD(w.peakMC)}</td>
+      <td class="px-4 py-3">
+        <div class="font-bold ${pos ? 'text-emerald-500' : 'text-red-400'}">${pos ? '+' : ''}${w.gainPct}%</div>
+        <div class="text-xs text-slate-400">${w.gainMultiple}x</div>
+      </td>
+      <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">${fmtDuration(w.durationMs)}</td>
+      <td class="px-4 py-3 text-xs text-slate-400">${w.ts ? timeAgo(w.ts) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
 async function loadWinHistory() {
   const body = document.getElementById('winHistoryBody');
   try {
     const { wins } = await fetch(BASE + '/api/wins').then(r => r.json());
-    if (!wins || !wins.length) {
+    if (!wins?.length) {
       body.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">No wins recorded yet.</td></tr>';
       return;
     }
-    body.innerHTML = wins.map(w => {
-      const sig     = w.signal || '—';
-      const sigCls  = sig === 'STRONG' ? 'signal-strong' : sig === 'MEDIUM' ? 'signal-medium' : 'signal-low';
-      const gainPos = w.gainPct >= 0;
-      return `
-      <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors">
-        <td class="px-4 py-3">
-          <div class="font-semibold text-[#0a1b33] text-sm">$${w.symbol}</div>
-          ${w.address ? `<a href="https://gmgn.ai/sol/token/${w.address}" target="_blank" rel="noopener noreferrer"
-            class="text-xs font-mono text-slate-400 hover:text-blue-400 transition-colors">${w.address.slice(0,6)}…${w.address.slice(-4)}</a>` : ''}
-        </td>
-        <td class="px-4 py-3"><span class="${sigCls} text-xs font-bold px-2.5 py-1 rounded-full">${sig}</span></td>
-        <td class="px-4 py-3 text-xs text-slate-500">${TYPE_LABEL[w.type] || w.type || '—'}</td>
-        <td class="px-4 py-3 text-sm text-slate-600">${fmtUSD(w.entryMC)}</td>
-        <td class="px-4 py-3 text-sm font-semibold text-[#0a1b33]">${fmtUSD(w.peakMC)}</td>
-        <td class="px-4 py-3">
-          <div class="font-bold ${gainPos ? 'text-emerald-500' : 'text-red-400'}">${gainPos ? '+' : ''}${w.gainPct}%</div>
-          <div class="text-xs text-slate-400">${w.gainMultiple}x</div>
-        </td>
-        <td class="px-4 py-3 text-xs text-slate-500">${fmtDuration(w.durationMs)}</td>
-        <td class="px-4 py-3 text-xs text-slate-400">${w.ts ? timeAgo(w.ts) : '—'}</td>
-      </tr>`;
-    }).join('');
+    whData = wins;
+    renderWinHistory();
+
+    // attach sort listeners once
+    document.querySelectorAll('.wh-sort').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.key;
+        if (whSortKey === key) { whSortDir *= -1; }
+        else { whSortKey = key; whSortDir = -1; }
+        // update arrows
+        document.querySelectorAll('.wh-sort .wh-arrow').forEach(a => a.classList.add('hidden'));
+        const arrow = th.querySelector('.wh-arrow');
+        arrow.classList.remove('hidden');
+        arrow.textContent = whSortDir === -1 ? '↓' : '↑';
+        arrow.classList.add('sort-active');
+        renderWinHistory();
+      });
+    });
   } catch {
     body.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">Failed to load win history.</td></tr>';
   }
@@ -866,12 +1165,171 @@ document.getElementById('winHistoryToggle').addEventListener('click', () => {
   }
 });
 
+// ── Legend ──
+function openLegend()  { document.getElementById('legendOverlay').classList.remove('hidden'); }
+function closeLegend() { document.getElementById('legendOverlay').classList.add('hidden'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLegend(); });
+
+// ── Dark mode ──
+const darkKey = 'ms-dark';
+function applyDark(on) {
+  document.documentElement.classList.toggle('dark', on);
+  const icon = document.getElementById('darkIcon');
+  if (icon) { icon.className = on ? 'ph ph-sun' : 'ph ph-moon'; }
+  localStorage.setItem(darkKey, on ? '1' : '0');
+}
+function toggleDark() { applyDark(!document.documentElement.classList.contains('dark')); }
+applyDark(localStorage.getItem(darkKey) === '1');
+
+// ── Notifications + Sound ──
+let notifEnabled = false;
+let prevWatchlistAddrs = new Set();
+const NEW_LABEL_MS = 15 * 60_000; // 15 minutes
+
+function playAlert() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [880, 1100].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.28);
+      osc.start(ctx.currentTime + i * 0.12);
+      osc.stop(ctx.currentTime + i * 0.12 + 0.28);
+    });
+  } catch {}
+}
+
+function setNotifBtnState(on) {
+  const btn = document.getElementById('notifBtn');
+  if (!btn) return;
+  if (on) {
+    btn.style.background = 'rgba(16,185,129,.12)';
+    btn.style.borderColor = 'rgba(16,185,129,.4)';
+    btn.style.color = '#10b981';
+    btn.title = 'Alerts on — click to disable';
+  } else {
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.title = 'Enable alerts';
+  }
+}
+
+function toggleNotifications() {
+  notifEnabled = !notifEnabled;
+  setNotifBtnState(notifEnabled);
+}
+
+function isNew(coin) {
+  return coin.called_at && (Date.now() - coin.called_at) < NEW_LABEL_MS;
+}
+
+function checkNewSignals(coins) {
+  if (!notifEnabled) return;
+  let hasNew = false;
+  coins.forEach(c => {
+    if (c.contract && !prevWatchlistAddrs.has(c.contract)) hasNew = true;
+  });
+  if (hasNew) playAlert();
+  prevWatchlistAddrs = new Set(coins.map(c => c.contract).filter(Boolean));
+}
+
+// ── Mobile card render ──
+function renderMobileCards(list) {
+  const el = document.getElementById('watchlistCards');
+  if (!list.length) { el.innerHTML = '<div class="text-center py-16 text-slate-400 text-sm">No tokens match filters.</div>'; return; }
+  el.innerHTML = list.map(c => {
+    const sigCls = c.buy_signal === 'STRONG' ? 'signal-strong' : c.buy_signal === 'MEDIUM' ? 'signal-medium' : 'signal-low';
+    const gainColor = (c.gainPct ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
+    return `
+    <div class="rounded-2xl border border-slate-200/60 dark:border-[#2a2d3a] bg-white dark:bg-[#1a1d27] p-4 shadow-sm">
+      <div class="flex items-center gap-3 mb-3">
+        ${logoHtml(c.contract, c.ticker, 10)}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold text-[#0a1b33] dark:text-white">$${c.ticker}</span>
+            ${isNew(c) ? '<span class="badge-new">new</span>' : ''}
+          </div>
+          <div class="text-xs text-slate-400 truncate">${c.name}</div>
+        </div>
+        <span class="${sigCls} text-xs font-bold px-2 py-0.5 rounded-full">${c.buy_signal}</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-xs mb-3">
+        <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Entry</div>
+          <div class="font-semibold text-[#0a1b33] dark:text-slate-300">${fmtUSD(c.start_mc)}</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Now</div>
+          <div class="font-semibold ${gainColor}">${fmtUSD(c.market_cap)}</div>
+          ${c.gainPct != null ? `<div class="text-xs ${gainColor}">${c.gainPct >= 0 ? '+' : ''}${c.gainPct.toFixed(1)}%</div>` : ''}
+        </div>
+        <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Peak</div>
+          <div class="font-semibold text-emerald-600">${c.peakMC ? fmtUSD(c.peakMC) : '—'}</div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        <div class="text-xs text-slate-400">${c.called_at ? timeAgo(c.called_at) : '—'}</div>
+        ${buyLinks(c.contract)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Miss analysis ──
+async function loadMisses() {
+  try {
+    const { misses } = await fetch(BASE + '/api/misses').then(r => r.json());
+    if (!misses?.length) return;
+    document.getElementById('missSection').classList.remove('hidden');
+    const body = document.getElementById('missBody');
+    body.innerHTML = misses.slice(0, 50).map(m => {
+      const pct = m.peakGainPct ?? 0;
+      const col = pct >= 40 ? 'text-amber-500' : pct >= 20 ? 'text-slate-500' : 'text-slate-400';
+      const sigCls = m.signal === 'STRONG' ? 'signal-strong' : m.signal === 'MEDIUM' ? 'signal-medium' : 'signal-low';
+      return `<tr class="border-b border-slate-200/70 dark:border-[#2a2d3a] last:border-0">
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2.5">
+            ${logoHtml(m.address, m.symbol, 7)}
+            <div>
+              <div class="font-semibold text-[#0a1b33] dark:text-white text-sm">$${m.symbol}</div>
+              <a href="/token?address=${encodeURIComponent(m.address)}" target="_blank" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">Detail →</a>
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-3"><span class="${sigCls} text-xs font-bold px-2 py-0.5 rounded-full">${m.signal ?? '—'}</span></td>
+        <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">${(m.type ?? '').replace(/_/g,' ')}</td>
+        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">${fmtUSD(m.entryMC)}</td>
+        <td class="px-4 py-3 font-semibold text-sm ${col}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</td>
+      </tr>`;
+    }).join('');
+  } catch {}
+}
+
+// ── Patch render to also update mobile + fire notifications ──
+const _origRenderWatchlist = renderWatchlist;
+renderWatchlist = function(list) {
+  _origRenderWatchlist(list);
+  const filtered = filterSig === 'all' ? list : list.filter(c => c.buy_signal === filterSig);
+  renderMobileCards(filtered);
+  checkNewSignals(filtered);
+};
+
 // ── Boot ──
 fetchData();
 loadStats();
+loadTop5();
+loadMisses();
 startCountdown();
 setInterval(fetchData, REFRESH_MS);
 setInterval(loadStats, 60_000);
+setInterval(loadTop5, 5 * 60_000);
+setInterval(loadMisses, 5 * 60_000);
 </script>
 </body>
 </html>

@@ -39,7 +39,7 @@ loadEnv(path.join(os.homedir(), '.config', 'gmgn', '.env'));
 // ─── Config ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   scanIntervalMs:      60_000,
-  minGainPct:          100,     // alert at 2x
+  minGainPct:          50,      // alert at 1.5x
 
   // Step 1 — server-side filters (sent to GMGN API)
   maxMarketCap:        20000,   // raised: catch tokens that already moved from $6k to $12k
@@ -102,24 +102,37 @@ function signalTier(score, maxScore) {
 }
 
 function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice) {
-  const mc     = entry.token.usd_market_cap ?? 0;
-  const curMC  = entryPrice > 0 ? (currentPrice / entryPrice) * mc : mc;
-  const record = {
-    ts:           Date.now(),
-    address:      entry.token.address,
-    symbol:       entry.token.symbol,
-    type,
-    signal:       signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
-    entryMC:      mc,
-    peakMC:       Math.round(curMC),
-    gainPct:      parseFloat(gainPct.toFixed(2)),
-    gainMultiple: parseFloat(gainMultiple),
-    score:        entry.score ?? null,
-    maxScore:     entry.maxScore ?? null,
-    durationMs:   Date.now() - entry.addedAt,
-  };
-  db.wins.records.push(record);
-  if (db.wins.records.length > MAX_RECORDS) db.wins.records = db.wins.records.slice(-MAX_RECORDS);
+  const mc    = entry.token.usd_market_cap ?? 0;
+  const curMC = entryPrice > 0 ? (currentPrice / entryPrice) * mc : mc;
+
+  const existing = db.wins.records.find(r => r.address === entry.token.address);
+  if (existing) {
+    existing.peakMC       = Math.round(curMC);
+    existing.gainPct      = parseFloat(gainPct.toFixed(2));
+    existing.gainMultiple = parseFloat(gainMultiple);
+    existing.updatedAt    = Date.now();
+  } else {
+    db.wins.records.push({
+      ts:           Date.now(),
+      address:      entry.token.address,
+      symbol:       entry.token.symbol,
+      name:         entry.token.name ?? entry.token.symbol,
+      twitter:      entry.token.twitter  ?? null,
+      telegram:     entry.token.telegram ?? null,
+      website:      entry.token.website  ?? null,
+      type,
+      signal:       signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
+      entryMC:      mc,
+      peakMC:       Math.round(curMC),
+      gainPct:      parseFloat(gainPct.toFixed(2)),
+      gainMultiple: parseFloat(gainMultiple),
+      score:        entry.score ?? null,
+      maxScore:     entry.maxScore ?? null,
+      durationMs:   Date.now() - entry.addedAt,
+    });
+    if (db.wins.records.length > MAX_RECORDS) db.wins.records = db.wins.records.slice(-MAX_RECORDS);
+  }
+
   db.wins.updatedAt = Date.now();
   saveJSON(WINS_FILE, db.wins);
 }
@@ -196,7 +209,8 @@ function computeStats() {
 // ─── GMGN CLI ────────────────────────────────────────────────────────────────
 function gmgn(args) {
   try {
-    const out = execSync(`node_modules/.bin/gmgn-cli ${args} --raw`, { encoding: 'utf8', timeout: 30_000 });
+    const cli = process.platform === 'win32' ? 'node_modules\\.bin\\gmgn-cli' : 'node_modules/.bin/gmgn-cli';
+    const out = execSync(`${cli} ${args} --raw`, { encoding: 'utf8', timeout: 30_000 });
     return JSON.parse(out.trim());
   } catch {
     return null;
@@ -435,7 +449,7 @@ function handleStats(chatId) {
     `   Min swaps (24h):  ${CONFIG.minSwaps24h}`,
     `   Flash pump:       skip if candle0 ≥ ${CONFIG.flashPumpThreshold * 100}% ATH`,
     `   Max rug:          ${CONFIG.maxRugRatio}`,
-    `   Min gain:         ${CONFIG.minGainPct}% (2x)`,
+    `   Min gain:         ${CONFIG.minGainPct}% (1.5x)`,
   ].join('\n'), chatId);
 }
 
@@ -518,7 +532,7 @@ async function scan() {
       continue;
     }
 
-    watchlist.set(token.address, { token, addedAt: now, firstOpen: null, currentClose: null });
+    watchlist.set(token.address, { token, addedAt: now, firstOpen: null, currentClose: null, peakClose: null });
     newAdded++;
     const bsr = (token.sells_24h > 0 ? token.buys_24h / token.sells_24h : token.buys_24h).toFixed(1);
     console.log(
@@ -566,6 +580,7 @@ async function scan() {
 
     const currentClose = parseFloat(candles[candles.length - 1].close);
     entry.currentClose = currentClose;
+    if (!entry.peakClose || currentClose > entry.peakClose) entry.peakClose = currentClose;
     const gainPct      = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (currentClose / entry.firstOpen).toFixed(2);
 
@@ -635,7 +650,7 @@ const MIGRATION_CONFIG = {
 
   // Kline monitoring
   klineDelayMs:      400,
-  gainAlertPct:      100,      // alert at 2x
+  gainAlertPct:      50,       // alert at 1.5x
 };
 
 // ─── Migration scanner state ──────────────────────────────────────────────────
@@ -868,6 +883,7 @@ async function scanMigrated() {
 
     const currentClose  = parseFloat(candles[candles.length - 1].close);
     entry.currentClose  = currentClose;
+    if (!entry.peakClose || currentClose > entry.peakClose) entry.peakClose = currentClose;
     const gainPct       = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple  = (currentClose / entry.firstOpen).toFixed(2);
     const newMultiple   = parseFloat(gainMultiple);
@@ -905,7 +921,7 @@ const NEAR_COMPLETION_CONFIG = {
   strongThreshold: 18,
 
   klineDelayMs:    400,
-  gainAlertPct:    100,
+  gainAlertPct:    50,         // alert at 1.5x
 };
 
 const NEAR_COMPL_MAX_SCORE = 38;
@@ -1111,6 +1127,7 @@ async function scanNearCompletion() {
 
     const current      = parseFloat(candles[candles.length - 1].close);
     entry.currentClose = current;
+    if (!entry.peakClose || current > entry.peakClose) entry.peakClose = current;
     const gainPct      = ((current - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (current / entry.firstOpen).toFixed(2);
     const newMult      = parseFloat(gainMultiple);
@@ -1164,6 +1181,9 @@ function serializeWatchlistEntry(address, entry) {
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
+    peakMC:       entry.peakClose && entry.firstOpen && t.usd_market_cap
+                    ? Math.round((entry.peakClose / entry.firstOpen) * t.usd_market_cap)
+                    : null,
     hitAt:        entry.hitAt ?? null,
     bundlerRate:  t.bundler_trader_amount_rate,
     bundlerHold:  t.bundler_mhr,
@@ -1206,6 +1226,9 @@ function serializeGraduationEntry(address, entry, type) {
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
+    peakMC:       entry.peakClose && entry.firstOpen && entry.token.usd_market_cap
+                    ? Math.round((entry.peakClose / entry.firstOpen) * entry.token.usd_market_cap)
+                    : null,
     lastMultiple: entry.lastMultiple,
     score,
     maxScore,
@@ -1217,6 +1240,7 @@ function serializeGraduationEntry(address, entry, type) {
     kol:          entry.token.renowned_count,
     gradMin:      entry.token.complete_cost_time ? (entry.token.complete_cost_time / 60).toFixed(1) : null,
     rugRatio:     entry.token.rug_ratio,
+    bundlerRate:  entry.token.bundler_trader_amount_rate ?? null,
     visits:       entry.token.visiting_count ?? null,
     buys:         entry.token.buys_24h ?? null,
     sells:        entry.token.sells_24h ?? null,
@@ -1294,6 +1318,17 @@ const dashServer = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/api/misses') {
+    // Near-misses: tokens that expired without hitting target, sorted by peakGainPct desc
+    const nearMisses = [...db.misses.records]
+      .filter(r => r.peakGainPct != null)
+      .sort((a, b) => b.peakGainPct - a.peakGainPct)
+      .slice(0, 100);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ misses: nearMisses }));
+    return;
+  }
+
   const staticContentTypes = {
     '.html': 'text/html',
     '.js':   'text/javascript',
@@ -1324,12 +1359,15 @@ const dashServer = http.createServer((req, res) => {
     return;
   }
 
-  if (['/','index.html','/dashboard.html','/memesight.html','/token.html','/scanner-config.js'].some(p => url === p || url === '/'+p)) {
+  if (['/','index.html','/dashboard','/dashboard.html','/memesight','/memesight.html','/token','/token.html','/scanner-config.js'].some(p => url === p || url === '/'+p)) {
     const map = {
       '/':                  path.join('dist', 'index.html'),
       '/index.html':        path.join('dist', 'index.html'),
+      '/dashboard':         'memesight.html',
       '/dashboard.html':    'memesight.html',
+      '/memesight':         'memesight.html',
       '/memesight.html':    'memesight.html',
+      '/token':             'token.html',
       '/token.html':        'token.html',
       '/scanner-config.js': 'scanner-config.js',
     };
@@ -1371,7 +1409,7 @@ console.log(`   Interval:        ${CONFIG.scanIntervalMs / 1000}s`);
 console.log(`   Min fee:         ${CONFIG.minTotalFee} SOL`);
 console.log(`   Min bundler buy: ${CONFIG.minBundlerRate * 100}%`);
 console.log(`   Min bundler hold:${CONFIG.minBundlerHoldRate * 100}%`);
-console.log(`   Min gain:        ${CONFIG.minGainPct}% (2x)`);
+console.log(`   Min gain:        ${CONFIG.minGainPct}% (1.5x)`);
 console.log(`   Commands:        /stats  /wins  /open`);
 console.log(`\n🔍 Migration Scanner (Gooner/SOCK pattern)`);
 console.log(`   Interval:        ${MIGRATION_CONFIG.intervalMs / 1000}s`);

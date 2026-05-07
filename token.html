@@ -12,17 +12,17 @@ tailwind.config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter','ui-sans-serif','system-ui','sans-serif'],
-        display: ['Outfit','ui-sans-serif','system-ui','sans-serif'],
+        sans: ['Plus Jakarta Sans','ui-sans-serif','system-ui','sans-serif'],
+        display: ['Plus Jakarta Sans','ui-sans-serif','system-ui','sans-serif'],
       },
     }
   }
 }
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
-  body { background:#f9fafb; color:#475569; font-family:'Inter',ui-sans-serif,system-ui,sans-serif; }
-  .font-display { font-family:'Outfit',ui-sans-serif,system-ui,sans-serif; }
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+  body { background:#f9fafb; color:#475569; font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif; }
+  .font-display { font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif; }
   .signal-strong { background:#dcfce7; color:#047857; border:1px solid #bbf7d0; }
   .signal-medium { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
   .signal-low    { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
@@ -58,7 +58,7 @@ tailwind.config = {
 <!-- Header -->
 <header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm bg-[#f9fafb]/80">
   <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center gap-4">
-    <a href="/memesight.html" class="text-slate-500 hover:text-[#0a1b33] text-sm font-semibold transition-colors flex items-center gap-1.5">
+    <a href="/memesight" class="text-slate-500 hover:text-[#0a1b33] text-sm font-semibold transition-colors flex items-center gap-1.5">
       ← Back
     </a>
     <div class="h-4 w-px bg-slate-200"></div>
@@ -159,12 +159,163 @@ function scoreBar(score, max) {
   </div>`;
 }
 
+function fmtUSD(n) {
+  if (!n || n === 0) return '—';
+  if (n >= 1_000_000) return '$' + (n/1_000_000).toFixed(2) + 'M';
+  if (n >= 1_000)     return '$' + (n/1_000).toFixed(1) + 'K';
+  return '$' + n.toFixed(0);
+}
+
+function renderWinRecord(w, statsRes) {
+  const mult     = w.gainMultiple ?? 1;
+  const multDisp = mult >= 10 ? mult.toFixed(0) : mult.toFixed(1);
+  const gainPct  = w.gainPct != null ? `+${w.gainPct.toFixed(0)}%` : `+${((mult-1)*100).toFixed(0)}%`;
+  const sigCls   = w.signal === 'STRONG' ? 'signal-strong' : w.signal === 'MEDIUM' ? 'signal-medium' : 'signal-low';
+  const wrCtx    = statsRes?.bySignal?.[w.signal];
+  const wrText   = wrCtx && wrCtx.total > 0
+    ? `${w.signal} signals: <strong class="text-white">${wrCtx.rate}%</strong> win rate (${wrCtx.wins}W / ${wrCtx.total - wrCtx.wins}L across ${wrCtx.total} tokens)`
+    : 'Not enough data yet to show historical win rate for this signal';
+
+  const twitterUrl = w.twitter
+    ? (w.twitter.startsWith('http') ? w.twitter.replace('twitter.com','x.com') : 'https://x.com/'+w.twitter.replace('@',''))
+    : null;
+
+  document.getElementById('main').innerHTML = `
+  <div class="space-y-5 fade-in">
+
+    <!-- Token header -->
+    <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6">
+      <div class="flex items-start gap-4 flex-wrap">
+        <div class="relative w-16 h-16 flex-shrink-0">
+          <img src="https://dd.dexscreener.com/ds-data/tokens/solana/${w.address}.png"
+               class="w-16 h-16 rounded-full object-cover"
+               onerror="this.style.display='none';this.nextSibling.style.display='flex'"/>
+          <div class="w-16 h-16 rounded-full bg-[#1e2433] border border-[#2a3347] items-center justify-center text-xl font-bold text-slate-400 uppercase absolute inset-0" style="display:none">
+            ${(w.symbol||'?').slice(0,2)}
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap items-center gap-3 mb-1">
+            <h1 class="text-2xl font-bold text-white">$${w.symbol}</h1>
+            <span class="${sigCls} text-xs font-bold px-2.5 py-1 rounded-full">${w.signal}</span>
+            <span class="text-xs text-slate-500 bg-[#1e2433] px-2 py-1 rounded-full">${w.type?.replace(/_/g,' ') ?? '—'}</span>
+          </div>
+          <div class="text-slate-400 mb-2">${w.name ?? w.symbol}</div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-slate-500 cursor-pointer hover:text-slate-300 transition-colors"
+              onclick="navigator.clipboard.writeText('${w.address}')" title="Click to copy">${w.address}</span>
+            <span class="text-slate-700">·</span>
+            <span class="text-xs text-slate-600">click to copy</span>
+          </div>
+        </div>
+        <div class="flex flex-col items-end gap-1">
+          <div class="text-3xl font-extrabold text-emerald-500">${multDisp}x</div>
+          <div class="text-sm text-emerald-400">${gainPct}</div>
+          <div class="text-xs text-slate-500">peak gain</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MC row -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+        <div class="text-xs text-slate-500 mb-1">Start MC</div>
+        <div class="text-xl font-bold text-slate-300">${fmtUSD(w.entryMC)}</div>
+        <div class="text-xs text-slate-600 mt-0.5">when detected</div>
+      </div>
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+        <div class="text-xs text-slate-500 mb-1">Peak MC</div>
+        <div class="text-xl font-bold text-emerald-400">${fmtUSD(w.peakMC)}</div>
+        <div class="text-xs text-emerald-500/70 mt-0.5">${gainPct}</div>
+      </div>
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+        <div class="text-xs text-slate-500 mb-1">Signal</div>
+        <div class="text-xl font-bold text-slate-300">${w.signal}</div>
+      </div>
+      <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+        <div class="text-xs text-slate-500 mb-1">Type</div>
+        <div class="text-base font-bold text-slate-300 capitalize">${w.type?.replace(/_/g,' ') ?? '—'}</div>
+      </div>
+    </div>
+
+    <!-- Signal Analysis -->
+    <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-4">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Signal Analysis</h2>
+      ${w.score != null && w.maxScore != null ? `
+      <div>
+        <div class="text-xs text-slate-500 mb-2">Score</div>
+        ${scoreBar(w.score, w.maxScore)}
+      </div>` : ''}
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+        <div class="bg-[#0f1219] rounded-lg p-3">
+          <div class="text-slate-500 mb-1">Score</div>
+          <div class="font-bold text-white text-base">${w.score ?? '—'} / ${w.maxScore ?? '—'}</div>
+        </div>
+        <div class="bg-[#0f1219] rounded-lg p-3">
+          <div class="text-slate-500 mb-1">Signal Tier</div>
+          <div class="font-bold text-base ${w.signal==='STRONG'?'text-emerald-400':w.signal==='MEDIUM'?'text-amber-400':'text-slate-400'}">${w.signal}</div>
+        </div>
+        <div class="bg-[#0f1219] rounded-lg p-3">
+          <div class="text-slate-500 mb-1">Peak Multiple</div>
+          <div class="font-bold text-white text-base">${multDisp}x</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Historical Context -->
+    <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-3">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Historical Context</h2>
+      <p class="text-sm text-slate-400">${wrText}</p>
+      ${wrCtx && wrCtx.total > 0 ? `
+      <div class="flex items-center gap-3">
+        <div class="flex-1 h-2 bg-[#1e2433] rounded-full overflow-hidden">
+          <div style="width:${wrCtx.rate}%;background:${wrCtx.rate>=50?'#34d399':wrCtx.rate>=30?'#fbbf24':'#f87171'};height:100%;border-radius:4px"></div>
+        </div>
+        <span class="text-sm font-bold text-white">${wrCtx.rate}%</span>
+      </div>
+      <p class="text-xs text-slate-600">Average gain on wins: <strong class="text-slate-400">${wrCtx.avgGain>0?'+':''}${wrCtx.avgGain}%</strong> · Avg multiple: <strong class="text-slate-400">${wrCtx.avgMult}x</strong></p>
+      ` : ''}
+      <p class="text-xs text-slate-600">⚠️ Past performance does not guarantee future results. Not financial advice.</p>
+    </div>
+
+    <!-- Links -->
+    <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-3">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Links</h2>
+      <div class="flex flex-wrap gap-3">
+        <a href="https://pump.fun/coin/${w.address}" target="_blank" title="Pump.fun"
+           class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+          <img src="./src/img/pumpfun.svg" class="h-5 w-5 object-contain" loading="lazy"/>
+        </a>
+        <a href="https://gmgn.ai/sol/token/${w.address}" target="_blank" title="GMGN"
+           class="inline-flex h-11 w-24 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+          <img src="./src/img/gmgn.svg" class="h-5 w-20 object-contain" loading="lazy"/>
+        </a>
+        ${twitterUrl ? `<a href="${twitterUrl}" target="_blank" title="X / Twitter"
+           class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+          <img src="./src/img/x.svg" class="h-4 w-4 object-contain" loading="lazy"/>
+        </a>` : ''}
+        ${w.telegram ? `<a href="${w.telegram}" target="_blank"
+           class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1e2433] hover:bg-[#252d3a] border border-[#2a3347] text-slate-300 font-semibold text-sm transition-all">
+          ✈️ Telegram
+        </a>` : ''}
+        <a href="https://dexscreener.com/solana/${w.address}" target="_blank" title="DexScreener"
+           class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+          <img src="./src/img/dexscreener.svg" class="h-5 w-5 object-contain" loading="lazy"/>
+        </a>
+      </div>
+    </div>
+
+    <div class="text-center text-xs text-slate-500 py-2">Historical win record — token no longer on active watchlist.</div>
+  </div>`;
+}
+
 async function load() {
   if (!ADDRESS) return;
   try {
-    const [stateRes, statsRes] = await Promise.all([
+    const [stateRes, statsRes, winsRes] = await Promise.all([
       fetch(API).then(r=>r.json()),
       fetch(STATS).then(r=>r.json()).catch(()=>null),
+      fetch(BASE+'/api/wins').then(r=>r.json()).catch(()=>null),
     ]);
 
     // Find token in all watchlists
@@ -172,16 +323,22 @@ async function load() {
       ...(stateRes.watchlist||[]).map(t=>({...t,_src:'watchlist'})),
       ...(stateRes.graduationWatch||[]).map(t=>({...t,_src:'graduation'})),
     ];
-    const t = allTokens.find(t => t.address === ADDRESS);
+    let t = allTokens.find(t => t.address === ADDRESS);
 
     document.getElementById('lastUpdate').textContent = 'Updated '+new Date().toLocaleTimeString('en-US',{hour12:false});
 
     if (!t) {
+      // Fall back to historical wins record
+      const winRecord = (winsRes?.wins||[]).find(w => w.address === ADDRESS);
+      if (winRecord) {
+        renderWinRecord(winRecord, statsRes);
+        return;
+      }
       document.getElementById('main').innerHTML = `
         <div class="text-center py-24 space-y-3">
           <div class="text-slate-400 text-lg">Token not currently on watchlist</div>
           <div class="text-slate-600 text-sm font-mono">${ADDRESS}</div>
-          <a href="/memesight.html" class="inline-block mt-4 text-sm text-blue-500 hover:text-blue-400">← Back to dashboard</a>
+          <a href="/memesight" class="inline-block mt-4 text-sm text-blue-500 hover:text-blue-400">← Back to dashboard</a>
         </div>`;
       return;
     }
@@ -336,35 +493,27 @@ async function load() {
       <!-- Links -->
       <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-3">
         <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Links</h2>
-        <div class="flex flex-wrap gap-3">
-          <a href="https://pump.fun/coin/${t.address}" target="_blank"
-             aria-label="Open on Pump.fun"
-             title="Pump.fun"
-             class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+        <div class="flex flex-wrap gap-2">
+          <a href="https://pump.fun/coin/${t.address}" target="_blank" title="Pump.fun"
+             class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
             <img src="./src/img/pumpfun.svg" alt="" class="h-5 w-5 object-contain" loading="lazy"/>
           </a>
-          <a href="https://gmgn.ai/sol/token/${t.address}" target="_blank"
-             aria-label="Open on GMGN"
-             title="GMGN"
-             class="inline-flex h-11 w-24 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
-            <img src="./src/img/gmgn.svg" alt="" class="h-5 w-20 object-contain" loading="lazy"/>
+          <a href="https://gmgn.ai/sol/token/${t.address}" target="_blank" title="GMGN"
+             class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+            <img src="./src/img/gmgn.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
           </a>
-          ${t.twitter ? `<a href="${t.twitter.startsWith('http')?t.twitter.replace('twitter.com','x.com'):'https://x.com/'+t.twitter.replace('@','')}" target="_blank"
-             aria-label="Open on X"
-             title="X"
-             class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition-all shadow-sm">
-            <img src="./src/img/x.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
-          </a>` : ''}
-          ${t.telegram ? `<a href="${t.telegram}" target="_blank"
-             class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1e2433] hover:bg-[#252d3a] border border-[#2a3347] text-slate-300 font-semibold text-sm transition-all">
-            ✈️ Telegram
-          </a>` : ''}
-          <a href="https://dexscreener.com/solana/${t.address}" target="_blank"
-             aria-label="Open on DexScreener"
-             title="DexScreener"
-             class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+          <a href="https://dexscreener.com/solana/${t.address}" target="_blank" title="DexScreener"
+             class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
             <img src="./src/img/dexscreener.svg" alt="" class="h-5 w-5 object-contain" loading="lazy"/>
           </a>
+          ${t.twitter ? `<a href="${t.twitter.startsWith('http')?t.twitter.replace('twitter.com','x.com'):'https://x.com/'+t.twitter.replace('@','')}" target="_blank" title="X / Twitter"
+             class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+            <img src="./src/img/x.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
+          </a>` : ''}
+          ${t.telegram ? `<a href="${t.telegram}" target="_blank" title="Telegram"
+             class="inline-flex h-10 px-3 items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 text-xs font-semibold transition-all shadow-sm">
+            ✈️ Telegram
+          </a>` : ''}
         </div>
       </div>
 

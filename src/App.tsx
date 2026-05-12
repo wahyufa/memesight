@@ -68,7 +68,7 @@ function Hero() {
 
         <div className="flex flex-wrap items-center gap-3">
           <motion.a
-            href="/signd"
+            href="/memesight"
             className="inline-flex items-center gap-2 px-7 py-3 rounded-full bg-[#0a152d] dark:bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:shadow-xl transition-shadow"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
@@ -101,7 +101,7 @@ function Hero() {
               {label}
             </a>
           ))}
-          <a href="/signd"
+          <a href="/memesight"
             className="flex items-center gap-1.5 bg-white dark:bg-zinc-800 px-5 py-2 rounded-full text-[12px] font-semibold text-[#0a1b33] dark:text-white border border-slate-200/60 dark:border-zinc-600/60 shadow-sm hover:border-slate-300 dark:hover:border-zinc-500 transition-all">
             Open Dashboard <CaretRight size={11} />
           </a>
@@ -113,18 +113,48 @@ function Hero() {
 
 // ── Performers Marquee ────────────────────────────────────────────────────────
 interface WinEntry { address: string; symbol: string; name: string; gainMultiple: number; gainPct: number; }
+interface SignalEntry { address: string; symbol?: string; name?: string; signal?: string; feeSol?: number; }
+interface MarqueeToken { address: string; symbol: string; label: string; tone: 'gain' | 'signal'; }
 
 function PerformersMarquee() {
-  const [tokens, setTokens] = useState<WinEntry[]>([])
+  const [tokens, setTokens] = useState<MarqueeToken[]>([])
 
   useEffect(() => {
-    fetch(BASE + '/api/wins')
-      .then(r => r.json())
-      .then(({ wins }: { wins: WinEntry[] }) => {
-        if (!wins?.length) return
-        setTokens([...wins].sort((a, b) => b.gainMultiple - a.gainMultiple).slice(0, 20))
-      })
-      .catch(() => {})
+    let cancelled = false
+
+    async function loadTokens() {
+      try {
+        const { wins } = await fetch(BASE + '/api/wins', { cache: 'no-store' }).then(r => r.json()) as { wins?: WinEntry[] }
+        if (wins?.length) {
+          const mapped = [...wins]
+            .sort((a, b) => b.gainMultiple - a.gainMultiple)
+            .slice(0, 20)
+            .map(t => {
+              const mult = t.gainMultiple >= 10 ? t.gainMultiple.toFixed(0) : t.gainMultiple.toFixed(1)
+              return { address: t.address, symbol: t.symbol, label: `+${mult}x`, tone: 'gain' as const }
+            })
+          if (!cancelled) setTokens(mapped)
+          return
+        }
+      } catch {}
+
+      try {
+        const { signals } = await fetch(BASE + '/api/signals', { cache: 'no-store' }).then(r => r.json()) as { signals?: SignalEntry[] }
+        const mapped = (signals || [])
+          .filter(t => t.address && (t.symbol || t.name))
+          .slice(0, 20)
+          .map(t => ({
+            address: t.address,
+            symbol: t.symbol || t.name || t.address.slice(0, 4),
+            label: t.signal || (t.feeSol ? `${Number(t.feeSol).toFixed(1)} SOL` : 'LIVE'),
+            tone: 'signal' as const,
+          }))
+        if (!cancelled && mapped.length) setTokens(mapped)
+      } catch {}
+    }
+
+    loadTokens()
+    return () => { cancelled = true }
   }, [])
 
   if (!tokens.length) return null
@@ -145,7 +175,6 @@ function PerformersMarquee() {
       `}</style>
       <div className="perf-track flex items-center gap-0 w-max">
         {track.map((t, i) => {
-          const mult = t.gainMultiple >= 10 ? t.gainMultiple.toFixed(0) : t.gainMultiple.toFixed(1)
           return (
             <div key={i} className="flex items-center gap-3 px-6 flex-shrink-0">
               <div className="relative w-7 h-7 flex-shrink-0">
@@ -164,7 +193,7 @@ function PerformersMarquee() {
               </div>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-sm font-semibold text-[#0a1b33] dark:text-white">${t.symbol}</span>
-                <span className="text-xs font-bold text-emerald-500">+{mult}x</span>
+                <span className={cn('text-xs font-bold', t.tone === 'gain' ? 'text-emerald-500' : 'text-amber-500')}>{t.label}</span>
               </div>
               <span className="text-slate-200 dark:text-zinc-700 select-none ml-2">·</span>
             </div>
@@ -275,7 +304,7 @@ function ProofSection() {
       </div>
 
       <div className="text-center mt-8">
-        <a href="/signd" className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors">
+        <a href="/memesight" className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors">
           See all signals in the dashboard <CaretRight size={13} />
         </a>
       </div>
@@ -535,7 +564,7 @@ function CTABanner() {
           </p>
           <p className="text-xs text-slate-400 dark:text-zinc-500 mb-10">⚠️ Not financial advice — DYOR.</p>
           <motion.a
-            href="/signd"
+            href="/memesight"
             className="inline-flex items-center gap-2 px-10 py-4 rounded-full bg-[#0a152d] dark:bg-emerald-600 text-white font-semibold text-base shadow-lg hover:shadow-xl transition-shadow"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
@@ -567,7 +596,7 @@ function TopNav({ dark, toggleDark }: { dark: boolean; toggleDark: () => void })
             {dark ? <Sun size={14} /> : <Moon size={14} />}
 
           </button>
-          <a href="/signd"
+          <a href="/memesight"
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#0a152d] dark:bg-emerald-600 text-white text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
             Open Dashboard
           </a>

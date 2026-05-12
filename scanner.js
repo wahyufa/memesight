@@ -529,6 +529,14 @@ function pct(val) {
   return val != null ? `${(val * 100).toFixed(0)}%` : '—';
 }
 
+function axiomUrl(address) {
+  return `https://axiom.trade/t/${address}/@signd?chain=sol`;
+}
+
+function gmgnUrl(address) {
+  return `https://gmgn.ai/sol/token/${address}`;
+}
+
 function firstNumber(...values) {
   for (const value of values) {
     const n = Number(value);
@@ -603,7 +611,7 @@ function buildWatchlistEntry(token, buySellRatio) {
     `📊 Buy/Sell:     ${buySellRatio}x  (${token.buys_24h ?? 0}B / ${token.sells_24h ?? 0}S)  swaps24h: ${token.swaps_24h ?? 0}`,
     `📣 Social:       ${social}`,
     ``,
-    `🔗 <a href="https://gmgn.ai/sol/token/${token.address}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
+    `🔗 <a href="${axiomUrl(token.address)}">Axiom</a>  ·  <a href="${gmgnUrl(token.address)}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
     `📋 <code>${token.address}</code>`,
   ].join('\n');
 }
@@ -645,7 +653,7 @@ function buildAlert(token, gainPct, gainMultiple, entryPrice, currentPrice) {
     `🤖 Bundler:       ${bundlerSignal}`,
     `🛡 Safety:        ${safety}`,
     ``,
-    `🔗 <a href="https://pump.fun/${token.address}">Pump.fun</a>  ·  <a href="https://gmgn.ai/sol/token/${token.address}">GMGN</a>`,
+    `🔗 <a href="${axiomUrl(token.address)}">Axiom</a>  ·  <a href="${gmgnUrl(token.address)}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
     `<code>${token.address}</code>`,
   ].join('\n');
 }
@@ -656,7 +664,7 @@ function buildMilestoneAlert(token, gainPct, gainMultiple, currentPrice, estimat
     ``,
     `+${gainPct.toFixed(0)}%  |  MC ~${fmtUSD(estimatedMC)}  |  $${currentPrice.toExponential(4)}`,
     ``,
-    `🔗 <a href="https://pump.fun/${token.address}">Pump.fun</a>  ·  <a href="https://gmgn.ai/sol/token/${token.address}">GMGN</a>`,
+    `🔗 <a href="${axiomUrl(token.address)}">Axiom</a>  ·  <a href="${gmgnUrl(token.address)}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
   ].join('\n');
 }
 
@@ -704,7 +712,7 @@ function handleWins(chatId) {
   wins.slice(-20).forEach((w, i) => {
     lines.push(
       `${i + 1}. <b>$${w.token.symbol}</b>  +${w.gainPct.toFixed(0)}% (${w.gainMultiple}x)` +
-      `  <a href="https://pump.fun/${w.token.address}">↗</a>`
+      `  <a href="${axiomUrl(w.token.address)}">↗</a>`
     );
   });
   return sendTelegram(lines.join('\n'), chatId);
@@ -720,7 +728,7 @@ function handleOpen(chatId) {
       : '';
     lines.push(
       `${i++}. <b>$${entry.token.symbol}</b>  ${formatAge(entry.token.created_timestamp)}${gain}` +
-      `  <a href="https://pump.fun/${addr}">↗</a>`
+      `  <a href="${axiomUrl(addr)}">↗</a>`
     );
     if (i > 20) { lines.push(`  …and ${watchlist.size - 20} more`); break; }
   }
@@ -1042,7 +1050,7 @@ function buildMigrationAlert(token, score, reasons, gradMin) {
     `📝 Signals:  ${reasons.join(', ')}`,
     `📣 Social:   ${social}`,
     ``,
-    `🔗 <a href="https://gmgn.ai/sol/token/${token.address}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
+    `🔗 <a href="${axiomUrl(token.address)}">Axiom</a>  ·  <a href="${gmgnUrl(token.address)}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
     `<code>${token.address}</code>`,
   ].join('\n');
 }
@@ -1057,7 +1065,7 @@ function buildMigratedGainAlert(token, gainPct, gainMultiple, entryPrice, curren
     `+${gainPct.toFixed(0)}%  |  MC ~${mc}  |  $${currentPrice.toExponential(4)}`,
     `SM: ${token.smart_degen_count ?? 0}  KOL: ${token.renowned_count ?? 0}`,
     ``,
-    `🔗 <a href="https://pump.fun/${token.address}">Pump.fun</a>  ·  <a href="https://gmgn.ai/sol/token/${token.address}">GMGN</a>`,
+    `🔗 <a href="${axiomUrl(token.address)}">Axiom</a>  ·  <a href="${gmgnUrl(token.address)}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
   ].join('\n');
 }
 
@@ -1323,7 +1331,7 @@ function buildNearCompletionAlert(token, score, reasons) {
     `📝 Signals:  ${reasons.join(', ')}`,
     `📣 Social:   ${social}`,
     ``,
-    `🔗 <a href="https://gmgn.ai/sol/token/${token.address}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
+    `🔗 <a href="${axiomUrl(token.address)}">Axiom</a>  ·  <a href="${gmgnUrl(token.address)}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
     `<code>${token.address}</code>`,
   ].join('\n');
 }
@@ -1335,7 +1343,7 @@ function buildNearComplGainAlert(token, gainPct, gainMultiple, entry, current) {
     `+${gainPct.toFixed(0)}%  |  MC ~${fmtUSD((current / entry) * (token.usd_market_cap ?? 0))}  |  $${current.toExponential(4)}`,
     `SM: ${token.smart_degen_count ?? 0}  KOL: ${token.renowned_count ?? 0}`,
     ``,
-    `🔗 <a href="https://pump.fun/${token.address}">Pump.fun</a>  ·  <a href="https://gmgn.ai/sol/token/${token.address}">GMGN</a>`,
+    `🔗 <a href="${axiomUrl(token.address)}">Axiom</a>  ·  <a href="${gmgnUrl(token.address)}">GMGN</a>  ·  <a href="https://pump.fun/${token.address}">Pump.fun</a>`,
   ].join('\n');
 }
 
@@ -1469,6 +1477,10 @@ function serializeWatchlistEntry(address, entry) {
   s += Math.min(fee.scoreBonus, 2);
   const score = Math.min(s, 10);
   const action = getAction(score, 10);
+  const baseMC = entry.entryMC ?? t.usd_market_cap ?? 0;
+  const peakMC = entry.peakHigh && entry.firstOpen && baseMC
+    ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
+    : Math.round(baseMC);
 
   return {
     address,
@@ -1481,9 +1493,7 @@ function serializeWatchlistEntry(address, entry) {
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
-    peakMC:       entry.peakHigh && entry.firstOpen && entry.entryMC
-                    ? Math.round((entry.peakHigh / entry.firstOpen) * entry.entryMC)
-                    : null,
+    peakMC,
     hitAt:        entry.hitAt ?? null,
     bundlerRate:  t.bundler_trader_amount_rate,
     bundlerHold:  t.bundler_mhr,
@@ -1517,6 +1527,10 @@ function serializeGraduationEntry(address, entry, type) {
   const maxScore  = type === 'near_completion' ? NEAR_COMPL_MAX_SCORE : 42;
   const action    = getAction(score, maxScore);
   const fee       = entry.fee ?? feeProfile(entry.token);
+  const baseMC    = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
+  const peakMC    = entry.peakHigh && entry.firstOpen && baseMC
+    ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
+    : Math.round(baseMC);
   return {
     address,
     type,
@@ -1529,9 +1543,7 @@ function serializeGraduationEntry(address, entry, type) {
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
-    peakMC:       entry.peakHigh && entry.firstOpen && entry.entryMC
-                    ? Math.round((entry.peakHigh / entry.firstOpen) * entry.entryMC)
-                    : null,
+    peakMC,
     lastMultiple: entry.lastMultiple,
     feeSol:       fee.sol,
     feeRoute:     fee.route,

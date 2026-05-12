@@ -59,7 +59,7 @@ tailwind.config = {
 <!-- Header -->
 <header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm bg-[#f9fafb]/80">
   <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center gap-4">
-    <a href="/signd" class="text-slate-500 hover:text-[#0a1b33] text-sm font-semibold transition-colors flex items-center gap-1.5">
+    <a href="/memesight" class="text-slate-500 hover:text-[#0a1b33] text-sm font-semibold transition-colors flex items-center gap-1.5">
       ← Back
     </a>
     <div class="h-4 w-px bg-slate-200"></div>
@@ -82,6 +82,11 @@ const STATS = BASE + '/api/stats';
 
 const params  = new URLSearchParams(location.search);
 const ADDRESS = params.get('address') || '';
+const axiomUrl = address =>
+  `https://axiom.trade/t/${address}/@signd?chain=sol`;
+const gmgnUrl = address =>
+  `https://gmgn.ai/sol/token/${address}`;
+const AXIOM_LOGO_URL = 'https://docs.axiom.trade/~gitbook/image?url=https%3A%2F%2F539387073-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Forganizations%252FDXTwYvSKQ2pVi0g5GQRm%252Fsites%252Fsite_3vgMr%252Ficon%252F1vUMW6MDD5jb5oUjUbQ6%252Fxxx.png%3Falt%3Dmedia%26token%3Dd2fb4520-b856-4966-a634-befc7059ba7b&width=32&dpr=1&quality=100&sign=a6d0b3f6&sv=2';
 
 if (!ADDRESS) {
   document.getElementById('main').innerHTML = '<div class="rounded-2xl border border-slate-200/60 bg-white p-10 text-center text-red-500 shadow-sm">No address provided</div>';
@@ -101,10 +106,22 @@ const fP = v => {
   return n>=0.01 ? '$'+n.toFixed(4) : '$'+n.toExponential(3);
 };
 const fDur = ts => {
+  if (!ts) return '—';
   const s = Math.floor((Date.now()-ts)/1000);
   if (s<60) return s+'s'; const m=Math.floor(s/60);
   if (m<60) return m+'m '+(s%60)+'s';
   return Math.floor(m/60)+'h '+(m%60)+'m';
+};
+const fAge = createdAt => {
+  if (!createdAt) return '—';
+  const s = Math.floor(Date.now()/1000) - Number(createdAt);
+  if (!Number.isFinite(s) || s < 0) return '—';
+  if (s<60) return s+'s';
+  const m=Math.floor(s/60);
+  if (m<60) return m+'m';
+  const h=Math.floor(m/60);
+  if (h<24) return h+'h '+(m%60)+'m';
+  return Math.floor(h/24)+'d '+(h%24)+'h';
 };
 const pct = v => v!=null ? (v*100).toFixed(0)+'%' : '—';
 
@@ -284,13 +301,18 @@ function renderWinRecord(w, statsRes) {
     <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-3">
       <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Links</h2>
       <div class="flex flex-wrap gap-3">
+        <a href="${axiomUrl(w.address)}" target="_blank" title="Axiom" rel="noopener noreferrer"
+           class="inline-flex h-11 w-24 items-center gap-2 justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+          <img src="${AXIOM_LOGO_URL}" class="h-5 w-5 rounded object-contain" loading="lazy"/>
+          <span class="text-sm font-extrabold text-white tracking-wide">Axiom</span>
+        </a>
+        <a href="${gmgnUrl(w.address)}" target="_blank" title="GMGN" rel="noopener noreferrer"
+           class="inline-flex h-11 w-24 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
+          <img src="./src/img/gmgn.svg" class="h-5 w-20 object-contain" loading="lazy"/>
+        </a>
         <a href="https://pump.fun/coin/${w.address}" target="_blank" title="Pump.fun"
            class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
           <img src="./src/img/pumpfun.svg" class="h-5 w-5 object-contain" loading="lazy"/>
-        </a>
-        <a href="https://gmgn.ai/sol/token/${w.address}" target="_blank" title="GMGN"
-           class="inline-flex h-11 w-24 items-center justify-center rounded-xl bg-[#0a152d] hover:bg-[#101d3a] border border-[#0a152d] transition-all shadow-sm">
-          <img src="./src/img/gmgn.svg" class="h-5 w-20 object-contain" loading="lazy"/>
         </a>
         ${twitterUrl ? `<a href="${twitterUrl}" target="_blank" title="X / Twitter"
            class="inline-flex h-11 w-12 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
@@ -340,7 +362,7 @@ async function load() {
         <div class="text-center py-24 space-y-3">
           <div class="text-slate-400 text-lg">Token not currently on watchlist</div>
           <div class="text-slate-600 text-sm font-mono">${ADDRESS}</div>
-          <a href="/signd" class="inline-block mt-4 text-sm text-blue-500 hover:text-blue-400">← Back to dashboard</a>
+          <a href="/memesight" class="inline-block mt-4 text-sm text-blue-500 hover:text-blue-400">← Back to dashboard</a>
         </div>`;
       return;
     }
@@ -348,6 +370,8 @@ async function load() {
     const signal  = getSignal(t);
     const vol     = getVol(t);
     const mc      = curMC(t);
+    const peakMC  = t.peakMC || t.marketCap || mc;
+    const peakPct = t.marketCap && peakMC ? ((peakMC - t.marketCap) / t.marketCap) * 100 : null;
     const est     = PROFIT_EST[signal]?.[vol] || '—';
     const exits   = EXIT_WINDOWS[vol] || ['1hr'];
     const warnings = (t.reasons||[]).filter(r=>r.startsWith('⚠️'));
@@ -394,7 +418,7 @@ async function load() {
       </div>
 
       <!-- MC row -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
           <div class="text-xs text-slate-500 mb-1">Start MC</div>
           <div class="text-xl font-bold text-slate-300">${fU(t.marketCap)}</div>
@@ -406,8 +430,18 @@ async function load() {
           ${t.gainPct!=null?`<div class="text-xs font-semibold mt-0.5 ${t.gainPct>=0?'text-emerald-400':'text-red-400'}">${t.gainPct>=0?'+':''}${t.gainPct.toFixed(2)}%</div>`:''}
         </div>
         <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+          <div class="text-xs text-slate-500 mb-1">Peak MC</div>
+          <div class="text-xl font-bold text-emerald-400">${fU(peakMC)}</div>
+          ${peakPct!=null?`<div class="text-xs text-emerald-500/70 mt-0.5">${peakPct>=0?'+':''}${peakPct.toFixed(1)}%</div>`:''}
+        </div>
+        <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
           <div class="text-xs text-slate-500 mb-1">Liquidity</div>
           <div class="text-xl font-bold text-slate-300">${fU(t.liquidity)}</div>
+        </div>
+        <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
+          <div class="text-xs text-slate-500 mb-1">Token Age</div>
+          <div class="text-xl font-bold text-slate-300">${fAge(t.createdAt)}</div>
+          <div class="text-xs text-slate-600 mt-0.5">since launch</div>
         </div>
         <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
           <div class="text-xs text-slate-500 mb-1">On Watchlist</div>
@@ -494,15 +528,19 @@ async function load() {
 
       <!-- Links -->
       <div class="bg-[#13161f] border border-[#1e2433] rounded-2xl p-6 space-y-3">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Links</h2>
-        <div class="flex flex-wrap gap-2">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Links</h2>
+      <div class="flex flex-wrap gap-2">
+          <a href="${axiomUrl(t.address)}" target="_blank" title="Axiom" rel="noopener noreferrer"
+             class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+            <img src="${AXIOM_LOGO_URL}" alt="" class="h-5 w-5 rounded object-contain" loading="lazy"/>
+          </a>
+          <a href="${gmgnUrl(t.address)}" target="_blank" title="GMGN" rel="noopener noreferrer"
+             class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+            <img src="./src/img/gmgn.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
+          </a>
           <a href="https://pump.fun/coin/${t.address}" target="_blank" title="Pump.fun"
              class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
             <img src="./src/img/pumpfun.svg" alt="" class="h-5 w-5 object-contain" loading="lazy"/>
-          </a>
-          <a href="https://gmgn.ai/sol/token/${t.address}" target="_blank" title="GMGN"
-             class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
-            <img src="./src/img/gmgn.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
           </a>
           <a href="https://dexscreener.com/solana/${t.address}" target="_blank" title="DexScreener"
              class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">

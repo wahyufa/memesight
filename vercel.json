@@ -7,7 +7,9 @@
   "trailingSlash": false,
   "routes": [
     { "src": "/dashboard",         "dest": "/memesight.html"    },
+    { "src": "/memesight",         "dest": "/memesight.html"    },
     { "src": "/signd",             "dest": "/memesight.html"    },
+    { "src": "/call",              "dest": "/call.html"         },
     { "src": "/token",             "dest": "/token.html"        },
     { "src": "/scanner-config.js", "dest": "/scanner-config.js" },
     { "src": "/(.*)",              "dest": "/index.html"        }

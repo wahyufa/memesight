@@ -149,19 +149,23 @@ tailwind.config = {
 <!-- ─── Header ─────────────────────────────────────────────────────────── -->
 <header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm">
   <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
-    <div class="flex items-center gap-3">
+    <a href="/" class="flex items-center gap-3" aria-label="Back to landing page">
       <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto"/>
       <span class="text-slate-300 dark:text-slate-600 hidden sm:block">·</span>
       <span class="font-display font-bold text-sm text-[#0a1b33] dark:text-[#e8edf5] hidden sm:block">Call List</span>
       <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50">BETA</span>
-    </div>
+    </a>
     <div class="flex items-center gap-3">
       <span class="text-xs text-slate-400 hidden sm:block" id="lastUpdated">—</span>
       <button onclick="toggleDark()"
         class="w-9 h-9 rounded-full flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
         <i class="ph ph-moon" style="font-size:15px" id="darkIcon"></i>
       </button>
-      <a href="/signd"
+      <a href="/"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-[#0a1b33] dark:text-[#e8edf5] text-sm font-semibold transition-colors hover:border-slate-300 dark:hover:border-[#3a3e4d] shadow-sm">
+        Home
+      </a>
+      <a href="/memesight"
         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
         Watchlist
       </a>
@@ -296,6 +300,10 @@ const timeAgo = ms => {
   return h + 'h' + (m%60 ? ' '+(m%60)+'m' : '') + ' ago';
 };
 const fmtTime = ts => new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
+const axiomUrl = address =>
+  `https://axiom.trade/t/${address}/@signd?chain=sol`;
+const gmgnUrl = address =>
+  `https://gmgn.ai/sol/token/${address}`;
 
 const TF_LABELS = { very_short:'Very short', short:'Short', mid:'Mid', long:'Long', very_long:'Very long' };
 const TF_CLS    = { very_short:'tf-very-short', short:'tf-short', mid:'tf-mid', long:'tf-long', very_long:'tf-very-long' };
@@ -402,8 +410,12 @@ function renderTable(list) {
           ${logo(c.addrFull, c.ticker, 32)}
           <div>
             <div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">$${c.ticker}</div>
-            <a href="https://pump.fun/coin/${c.addrFull}" target="_blank" rel="noopener noreferrer"
-               class="text-xs font-mono text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">${c.addrDisplay}</a>
+            <div class="flex items-center gap-2">
+              <a href="${axiomUrl(c.addrFull)}" target="_blank" rel="noopener noreferrer"
+                 class="text-xs font-mono text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">${c.addrDisplay}</a>
+              <a href="${gmgnUrl(c.addrFull)}" target="_blank" rel="noopener noreferrer"
+                 class="text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">GMGN</a>
+            </div>
           </div>
         </div>
       </td>

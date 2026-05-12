@@ -232,11 +232,11 @@ tailwind.config = {
 <!-- ─── Header ─────────────────────────────────────────────────────────── -->
 <header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm bg-[#f9fafb]/80">
   <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
-    <div class="flex items-center gap-2">
+    <a href="/" class="flex items-center gap-2" aria-label="Back to landing page">
       <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto dark:hidden"/>
       <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto hidden dark:block"/>
       <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold">BETA</span>
-    </div>
+    </a>
     <div class="flex items-center gap-3">
       <div class="text-right hidden sm:block">
         <div class="text-xs text-slate-500 dark:text-slate-600">Refreshes in</div>
@@ -248,8 +248,8 @@ tailwind.config = {
         class="w-9 h-9 rounded-full flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
         <i class="ph ph-moon" style="font-size:15px" id="darkIcon"></i>
       </button>
-      <a href="/signd" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
-        Dashboard
+      <a href="/" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
+        Home
       </a>
     </div>
   </div>
@@ -266,6 +266,23 @@ tailwind.config = {
     <span>Tokens seen: <span class="text-slate-700" id="hdrSeen">—</span></span>
     <span>Uptime: <span class="text-slate-700" id="hdrUptime">—</span></span>
     <span class="ml-auto text-slate-400">⚠️ Not financial advice — DYOR</span>
+  </div>
+</div>
+
+<div class="border-b border-emerald-200/70 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-900/50">
+  <div class="max-w-[1400px] mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center gap-3 text-sm">
+    <div class="flex items-start gap-3 text-emerald-900 dark:text-emerald-100">
+      <div class="mt-0.5 w-8 h-8 rounded-full bg-white/80 dark:bg-[#1a1d27] border border-emerald-200/80 dark:border-emerald-800/70 flex items-center justify-center text-emerald-600 dark:text-emerald-300 flex-shrink-0">
+        <i class="ph ph-flask" style="font-size:16px"></i>
+      </div>
+      <div>
+        <div class="font-semibold">Beta tool is live: Call List</div>
+        <div class="text-xs sm:text-sm text-emerald-700/80 dark:text-emerald-200/75">Track every scanner call, pending exits, settled wins/losses, and signal performance from one place.</div>
+      </div>
+    </div>
+    <a href="/call" class="sm:ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm">
+      Open Call List <i class="ph ph-arrow-right" style="font-size:14px"></i>
+    </a>
   </div>
 </div>
 
@@ -422,6 +439,7 @@ tailwind.config = {
               <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] dark:hover:text-white transition-colors select-none" id="thCalled">
                 Called <span id="calledSort" class="hidden">↑</span>
               </th>
+              <th class="px-4 py-3 text-left">Token Age</th>
               <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] dark:hover:text-white transition-colors select-none" id="thMC">
                 Start MC <span id="mcSort" class="sort-active">↑</span>
               </th>
@@ -436,7 +454,7 @@ tailwind.config = {
             </tr>
           </thead>
           <tbody id="watchlistBody">
-            <tr><td colspan="7" class="text-center py-16 text-slate-400">Loading watchlist…</td></tr>
+            <tr><td colspan="9" class="text-center py-16 text-slate-400">Loading watchlist…</td></tr>
           </tbody>
         </table>
       </div>
@@ -568,6 +586,12 @@ const resolveTokenAddress = token => {
   }
   return '';
 };
+
+const axiomUrl = contract =>
+  `https://axiom.trade/t/${contract}/@signd?chain=sol`;
+const gmgnUrl = contract =>
+  `https://gmgn.ai/sol/token/${contract}`;
+const AXIOM_LOGO_URL = 'https://docs.axiom.trade/~gitbook/image?url=https%3A%2F%2F539387073-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Forganizations%252FDXTwYvSKQ2pVi0g5GQRm%252Fsites%252Fsite_3vgMr%252Ficon%252F1vUMW6MDD5jb5oUjUbQ6%252Fxxx.png%3Falt%3Dmedia%26token%3Dd2fb4520-b856-4966-a634-befc7059ba7b&width=32&dpr=1&quality=100&sign=a6d0b3f6&sv=2';
 
 // ── Signal from action/score ──
 const getSignal = coin => {
@@ -773,19 +797,26 @@ const logoHtml = (contract, ticker, size = 8) =>
 // ── Direct buy links HTML ──
 const buyLinks = contract =>
   contract ? `<div class="flex gap-1.5">
+    <a href="${axiomUrl(contract)}" target="_blank"
+       aria-label="Open on Axiom"
+       title="Axiom"
+       rel="noopener noreferrer"
+       class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+      <img src="${AXIOM_LOGO_URL}" alt="" class="h-4 w-4 rounded object-contain" loading="lazy"/>
+    </a>
+    <a href="${gmgnUrl(contract)}" target="_blank"
+       aria-label="Open on GMGN"
+       title="GMGN"
+       rel="noopener noreferrer"
+       class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
+      <img src="./src/img/gmgn.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
+    </a>
     <a href="https://pump.fun/coin/${contract}" target="_blank"
        aria-label="Open on Pump.fun"
        title="Pump.fun"
        rel="noopener noreferrer"
        class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
       <img src="./src/img/pumpfun.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
-    </a>
-    <a href="https://gmgn.ai/sol/token/${contract}" target="_blank"
-       aria-label="Open on GMGN"
-       title="GMGN"
-       rel="noopener noreferrer"
-       class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
-      <img src="./src/img/gmgn.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
     </a>
   </div>` :
   `<span class="text-xs text-slate-400">Address unavailable</span>`;
@@ -841,7 +872,7 @@ function renderWatchlist(list) {
     `${filtered.length} of ${list.length} coins · MC ≥ $${(MIN_MC/1000).toFixed(0)}K · ${timeLabel}`;
 
   if (!filtered.length) {
-    body.innerHTML = `<tr><td colspan="7" class="text-center py-16 text-slate-400">No coins match the current filter</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="text-center py-16 text-slate-400">No coins match the current filter</td></tr>`;
     return;
   }
 
@@ -877,6 +908,11 @@ function renderWatchlist(list) {
       <!-- Called -->
       <td class="px-3 py-2.5">
         <div class="text-sm text-slate-500">${c.called_at ? timeAgo(c.called_at) : '—'}</div>
+      </td>
+
+      <!-- Token Age -->
+      <td class="px-3 py-2.5">
+        <div class="text-sm text-slate-500">${tokenAgeStr(c.createdAt) || '—'}</div>
       </td>
 
       <!-- Start MC -->
@@ -1262,7 +1298,10 @@ function renderMobileCards(list) {
         </div>
       </div>
       <div class="flex items-center justify-between">
-        <div class="text-xs text-slate-400">${c.called_at ? timeAgo(c.called_at) : '—'}</div>
+        <div class="text-xs text-slate-400">
+          ${c.called_at ? timeAgo(c.called_at) : '—'}
+          ${tokenAgeStr(c.createdAt) ? ` · ${tokenAgeStr(c.createdAt)}` : ''}
+        </div>
         ${buyLinks(c.contract)}
       </div>
     </div>`;

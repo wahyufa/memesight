@@ -82,6 +82,12 @@ const GMGN_LIMIT = {
   bufferMs: Number(process.env.GMGN_RATE_LIMIT_BUFFER_MS || 15_000),
 };
 
+const TELEGRAM = {
+  requested: process.env.TELEGRAM_ENABLED === 'true' || process.env.ENABLE_TELEGRAM === 'true',
+  ready: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
+};
+TELEGRAM.enabled = TELEGRAM.requested && TELEGRAM.ready;
+
 // ─── Session state ────────────────────────────────────────────────────────────
 const watchlist = new Map(); // Map<address, { token, addedAt, firstOpen }>
 const alerted   = new Set();
@@ -95,6 +101,7 @@ const DATA_DIR    = path.join(__dirname, 'data');
 const WINS_FILE   = path.join(DATA_DIR, 'wins.json');
 const MISSES_FILE = path.join(DATA_DIR, 'misses.json');
 const CALLS_FILE  = path.join(DATA_DIR, 'calls.json');
+const SIGNALS_FILE = path.join(DATA_DIR, 'signals.json');
 const MAX_RECORDS = 2000;
 const recordStore = createRecordStore();
 
@@ -153,10 +160,12 @@ function dedupFile(file, keepKey) {
 const db = {
   wins:   loadJSON(WINS_FILE),
   misses: loadJSON(MISSES_FILE),
+  signals: loadJSON(SIGNALS_FILE),
 };
 
 db.wins.records = await recordStore.loadRecords('wins', db.wins.records);
 db.misses.records = await recordStore.loadRecords('misses', db.misses.records);
+db.signals.records = await recordStore.loadRecords('signals', db.signals.records);
 
 dedupFile(WINS_FILE,   r => r.gainMultiple ?? 0);
 dedupFile(MISSES_FILE, r => r.peakGainPct  ?? 0);
@@ -164,6 +173,7 @@ if (dedupRecords(db.wins, r => r.gainMultiple ?? 0)) saveRecords('wins', WINS_FI
 if (dedupRecords(db.misses, r => r.peakGainPct ?? 0)) saveRecords('misses', MISSES_FILE, db.misses);
 await recordStore.saveRecords('wins', db.wins.records);
 await recordStore.saveRecords('misses', db.misses.records);
+await recordStore.saveRecords('signals', db.signals.records);
 
 function signalTier(score, maxScore) {
   const n = (score ?? 0) / (maxScore || 10);
@@ -237,6 +247,46 @@ function persistMiss(entry, type) {
   if (db.misses.records.length > MAX_RECORDS) db.misses.records = db.misses.records.slice(-MAX_RECORDS);
   db.misses.updatedAt = Date.now();
   saveRecords('misses', MISSES_FILE, db.misses);
+}
+
+function persistSignal(entry, type, status = 'watching') {
+  const token = entry.token;
+  const existing = db.signals.records.find(r => r.id === `${type}:${token.address}`);
+  const fee = entry.fee ?? feeProfile(token);
+  const record = {
+    id:          `${type}:${token.address}`,
+    ts:          existing?.ts ?? entry.addedAt ?? Date.now(),
+    updatedAt:   Date.now(),
+    address:     token.address,
+    symbol:      token.symbol,
+    name:        token.name ?? token.symbol,
+    type,
+    status,
+    signal:      signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
+    score:       entry.score ?? null,
+    maxScore:    entry.maxScore ?? null,
+    reasons:     entry.reasons ?? [],
+    entryMC:     entry.entryMC ?? token.usd_market_cap ?? 0,
+    marketCap:   token.usd_market_cap ?? null,
+    liquidity:   token.liquidity ?? null,
+    smartMoney:  token.smart_degen_count ?? null,
+    kol:         token.renowned_count ?? null,
+    gradMin:     token.complete_cost_time ? token.complete_cost_time / 60 : null,
+    feeSol:      fee.sol,
+    feeRoute:    fee.route,
+    lastMultiple: entry.lastMultiple ?? entry.lastAlertedMultiple ?? null,
+    twitter:     token.twitter ?? null,
+    telegram:    token.telegram ?? null,
+    website:     token.website ?? null,
+    createdAt:   token.created_timestamp ?? null,
+    addedAt:     entry.addedAt ?? null,
+  };
+
+  if (existing) Object.assign(existing, record);
+  else db.signals.records.push(record);
+  if (db.signals.records.length > MAX_RECORDS) db.signals.records = db.signals.records.slice(-MAX_RECORDS);
+  db.signals.updatedAt = Date.now();
+  saveRecords('signals', SIGNALS_FILE, db.signals);
 }
 
 function computeStats() {
@@ -403,6 +453,7 @@ function tgRequest(method, body) {
 }
 
 function sendTelegram(text, chatId) {
+  if (!TELEGRAM.enabled) return Promise.resolve(null);
   return tgRequest('sendMessage', {
     chat_id:                  chatId ?? process.env.TELEGRAM_CHAT_ID,
     text,
@@ -671,6 +722,7 @@ function handleOpen(chatId) {
 
 // ─── Telegram command polling ────────────────────────────────────────────────
 async function pollCommands() {
+  if (!TELEGRAM.enabled) return;
   const res = await tgRequest('getUpdates', { offset: lastUpdateId + 1, timeout: 10 });
   if (!res?.result?.length) return;
   for (const update of res.result) {
@@ -698,6 +750,7 @@ async function scan() {
   for (const [addr, entry] of watchlist) {
     if (now - entry.addedAt > CONFIG.maxWatchlistAgeMs) {
       if (!alerted.has(addr)) persistMiss(entry, 'new_creation');
+      persistSignal(entry, 'new_creation', 'expired');
       watchlist.delete(addr);
       console.log(`   ⏰ Expired: $${entry.token.symbol}`);
     }
@@ -726,7 +779,9 @@ async function scan() {
       continue;
     }
 
-    watchlist.set(token.address, { token, fee, entryMC: token.usd_market_cap ?? 0, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null });
+    const entry = { token, fee, entryMC: token.usd_market_cap ?? 0, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null };
+    watchlist.set(token.address, entry);
+    persistSignal(entry, 'new_creation', 'watching');
     newAdded++;
     const bsr = (token.sells_24h > 0 ? token.buys_24h / token.sells_24h : token.buys_24h).toFixed(1);
     console.log(
@@ -758,6 +813,7 @@ async function scan() {
       const c0AthPct = c0High / athHigh;
       if (candles.length >= 2 && c0AthPct >= CONFIG.flashPumpThreshold) {
         alerted.add(addr);
+        persistSignal(entry, 'new_creation', 'flash_pump');
         watchlist.delete(addr);
         console.log(`   ⚡ $${entry.token.symbol} flash pump (candle0 = ${(c0AthPct*100).toFixed(0)}% of ATH) — skip`);
         continue;
@@ -791,6 +847,7 @@ async function scan() {
 
     // Post-2x monitoring: if MC drops below 4k, drop silently
     if (entry.hitAt && estimatedMC > 0 && estimatedMC < 4000) {
+      persistSignal(entry, 'new_creation', 'dropped_low_mc');
       watchlist.delete(addr);
       console.log(`   💀 $${entry.token.symbol} MC ~${fmtUSD(estimatedMC)} < $4k, dropping`);
       continue;
@@ -804,6 +861,7 @@ async function scan() {
         alerted.add(addr);
         wins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now(), entryPrice: entry.firstOpen, currentPrice: entry.peakHigh });
         persistWin(entry, 'new_creation', peakGainPct, parseFloat(peakMultiple), entry.firstOpen, entry.peakHigh);
+        persistSignal(entry, 'new_creation', 'hit');
         await sendTelegram(buildAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 HIT: $${entry.token.symbol} +${gainPct.toFixed(0)}% — still watching`);
       } else {
@@ -1007,6 +1065,7 @@ async function scanMigrated() {
   for (const [addr, entry] of migratedWatch) {
     if (Date.now() - entry.addedAt > MIGRATION_CONFIG.maxWatchMinutes * 60_000) {
       if (entry.lastMultiple <= 1) persistMiss(entry, 'completed');
+      persistSignal(entry, 'completed', 'expired');
       migratedWatch.delete(addr);
       console.log(`   ⏰ Expired migrated: $${entry.token.symbol}`);
     }
@@ -1059,7 +1118,7 @@ async function scanMigrated() {
     newAlerted++;
 
     // Add to kline watchlist for 2x tracking
-    migratedWatch.set(addr, {
+    const entry = {
       token,
       fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
@@ -1070,7 +1129,9 @@ async function scanMigrated() {
       lastMultiple: 1,
       score,
       reasons,
-    });
+    };
+    migratedWatch.set(addr, entry);
+    persistSignal(entry, 'completed', 'watching');
   }
 
   // Monitor migratedWatch for 2x gains
@@ -1107,6 +1168,7 @@ async function scanMigrated() {
         entry.lastMultiple = newMultiple;
         migratedWins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now() });
         if (newMultiple >= 2) persistWin(entry, 'completed', peakGainPct, newMultiple, entry.firstOpen, entry.peakHigh);
+        persistSignal(entry, 'completed', 'hit');
         await sendTelegram(buildMigratedGainAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 MIGRATED HIT: $${entry.token.symbol} ${gainMultiple}x`);
       }
@@ -1279,6 +1341,7 @@ async function scanNearCompletion() {
   for (const [addr, entry] of nearComplWatch) {
     if (Date.now() - entry.addedAt > NEAR_COMPLETION_CONFIG.maxWatchMinutes * 60_000) {
       if (entry.lastMultiple <= 1) persistMiss(entry, 'near_completion');
+      persistSignal(entry, 'near_completion', 'expired');
       nearComplWatch.delete(addr);
       console.log(`   ⏰ Expired near-compl: $${entry.token.symbol}`);
     }
@@ -1316,7 +1379,7 @@ async function scanNearCompletion() {
     await sendTelegram(buildNearCompletionAlert(token, score, reasons));
     newAlerted++;
 
-    nearComplWatch.set(addr, {
+    const entry = {
       token,
       fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
@@ -1327,7 +1390,9 @@ async function scanNearCompletion() {
       lastMultiple: 1,
       score,
       reasons,
-    });
+    };
+    nearComplWatch.set(addr, entry);
+    persistSignal(entry, 'near_completion', 'watching');
   }
 
   // Monitor for gains
@@ -1363,6 +1428,7 @@ async function scanNearCompletion() {
         entry.lastMultiple = newMult;
         nearComplWins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now(), entryPrice: entry.firstOpen, currentPrice: entry.peakHigh });
         if (newMult >= 2) persistWin(entry, 'near_completion', peakGainPct, newMult, entry.firstOpen, entry.peakHigh);
+        persistSignal(entry, 'near_completion', 'hit');
         await sendTelegram(buildNearComplGainAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 NEAR-COMPL HIT: $${entry.token.symbol} ${gainMultiple}x`);
       }
@@ -1507,6 +1573,7 @@ const dashServer = http.createServer(async (req, res) => {
         uptime:    fmtUptime(),
       },
       watchlist:    serializeWatchlist(watchlist),
+      signals:      db.signals.records.slice(-100).reverse(),
       wins:         wins.slice(-50).map(w => ({
         symbol:       w.token.symbol,
         name:         w.token.name,
@@ -1539,7 +1606,7 @@ const dashServer = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/health') {
-    const supabase = await recordStore.health(['wins', 'misses', 'calls']);
+    const supabase = await recordStore.health(['wins', 'misses', 'calls', 'signals']);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({
       ok: true,
@@ -1549,6 +1616,7 @@ const dashServer = http.createServer(async (req, res) => {
       local: {
         wins: db.wins.records.length,
         misses: db.misses.records.length,
+        signals: db.signals.records.length,
       },
       updatedAt: Date.now(),
     }));
@@ -1575,6 +1643,16 @@ const dashServer = http.createServer(async (req, res) => {
       .slice(0, 100);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({ misses: nearMisses }));
+    return;
+  }
+
+  if (url === '/api/signals') {
+    const signals = await recordStore.loadRecords('signals', db.signals.records);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({
+      signals: [...signals].sort((a, b) => (b.updatedAt || b.ts || 0) - (a.updatedAt || a.ts || 0)).slice(0, 500),
+      updatedAt: Date.now(),
+    }));
     return;
   }
 
@@ -1714,12 +1792,12 @@ dashServer.listen(DASHBOARD_PORT, () => {
 });
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
-if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
-  console.error('❌  Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in D:\\claude\\gmgn\\.env');
-  process.exit(1);
+if (TELEGRAM.requested && !TELEGRAM.ready) {
+  console.warn('Telegram requested but TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID is missing; continuing with UI + database only.');
 }
 
 console.log('🤖 Pump.fun 2x Scanner Bot');
+console.log(`   Telegram:        ${TELEGRAM.enabled ? 'enabled' : 'disabled'}`);
 console.log(`   Interval:        ${CONFIG.scanIntervalMs / 1000}s`);
 console.log(`   Global fee:      ${GLOBAL_FEE.minSol} SOL (strong ${GLOBAL_FEE.strongSol} SOL)`);
 console.log(`   Min bundler buy: ${CONFIG.minBundlerRate * 100}%`);
@@ -1738,7 +1816,7 @@ console.log(`   Watch threshold: score ≥ ${NEAR_COMPLETION_CONFIG.watchThresho
 console.log(`   Signal:          score ≥ ${NEAR_COMPLETION_CONFIG.signalThreshold}`);
 console.log(`   Strong:          score ≥ ${NEAR_COMPLETION_CONFIG.strongThreshold}`);
 
-setInterval(() => pollCommands().catch(() => {}), 3_000);
+if (TELEGRAM.enabled) setInterval(() => pollCommands().catch(() => {}), 3_000);
 scan().catch(console.error);
 setInterval(() => scan().catch(console.error), CONFIG.scanIntervalMs);
 scanMigrated().catch(console.error);

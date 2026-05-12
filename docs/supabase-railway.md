@@ -20,11 +20,14 @@ GLOBAL_FEE_NEAR_COMPLETION_STRICT=false
 GMGN_KLINE_DELAY_MS=1500
 GMGN_RATE_LIMIT_BUFFER_MS=15000
 CALL_MONITOR_MAX_PER_CYCLE=4
+TELEGRAM_ENABLED=false
 ```
 
 `GLOBAL_MIN_FEE_SOL` is now the shared fee floor used by both `scanner.js` and `call-scanner.js`. The strict flags only matter when GMGN does not return a fee field for a token; leaving them `false` keeps the scanner from dropping otherwise valid candidates just because fee metadata is missing.
 
 The GMGN variables slow down kline polling and add a cooldown buffer after 429 responses. Keep these conservative on Railway because multiple services can share the same outbound IP quota.
+
+Telegram is optional. Leave `TELEGRAM_ENABLED=false` when the UI is the primary workflow; set it to `true` only if `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured and you still want chat alerts.
 
 ## Setup
 
@@ -37,7 +40,7 @@ The app still writes `data/*.json` as a local fallback. On Railway that filesyst
 
 ## Notes
 
-- The `signd_records` table stores three scopes: `wins`, `misses`, and `calls`.
+- The `signd_records` table stores four scopes: `signals`, `wins`, `misses`, and `calls`.
 - Row Level Security is enabled with no public policies. Backend writes use a secret/service-role key.
 - If Supabase is unavailable at boot, Signd falls back to local JSON and logs a warning.
 - Check `/api/health` on the deployed app to confirm whether Supabase env vars are present and REST access works.

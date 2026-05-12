@@ -23,3 +23,5 @@ The app still writes `data/*.json` as a local fallback. On Railway that filesyst
 - The `signd_records` table stores three scopes: `wins`, `misses`, and `calls`.
 - Row Level Security is enabled with no public policies. Backend writes use a secret/service-role key.
 - If Supabase is unavailable at boot, Signd falls back to local JSON and logs a warning.
+- Check `/api/health` on the deployed app to confirm whether Supabase env vars are present and REST access works.
+- An empty table can be normal if no scanner call/win/miss has been created yet; the logs should still show `[supabase] enabled`.

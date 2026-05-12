@@ -93,6 +93,7 @@ function saveCalls() {
 
 const db             = loadCalls();
 db.records           = await recordStore.loadRecords('calls', db.records);
+await recordStore.saveRecords('calls', db.records);
 const seenAddresses  = new Set(db.records.map(r => r.address));
 
 console.log(`[call-scanner] Loaded ${db.records.length} calls (${db.records.filter(r=>r.verdict==='pending').length} pending)`);
@@ -516,7 +517,7 @@ async function monitorCalls() {
 // ─── HTTP server ──────────────────────────────────────────────────────────────
 const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.png':'image/png', '.svg':'image/svg+xml' };
 
-http.createServer((req, res) => {
+http.createServer(async (req, res) => {
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET' };
 
   const url = req.url.split('?')[0];
@@ -530,6 +531,20 @@ http.createServer((req, res) => {
     res.end(JSON.stringify({
       calls: [...db.records].sort((a, b) => b.ts - a.ts),
       stats: { total: db.records.length, wins, losses, pending, settled, winRate: settled ? +(wins/settled*100).toFixed(1) : 0 },
+      updatedAt: Date.now(),
+    }));
+    return;
+  }
+
+  if (url === '/api/health') {
+    const supabase = await recordStore.health(['calls']);
+    res.writeHead(200, { 'Content-Type': 'application/json', ...cors });
+    res.end(JSON.stringify({
+      ok: true,
+      scanner: 'signd-call-scanner',
+      uptimeSec: Math.round(process.uptime()),
+      supabase,
+      local: { calls: db.records.length },
       updatedAt: Date.now(),
     }));
     return;

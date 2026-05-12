@@ -10,6 +10,13 @@ function recordId(record) {
   return String(record.id || record.address || `${record.ts || Date.now()}`);
 }
 
+function mergeRecords(remoteRecords = [], fallbackRecords = []) {
+  const byId = new Map();
+  for (const record of fallbackRecords) byId.set(recordId(record), record);
+  for (const record of remoteRecords) byId.set(recordId(record), record);
+  return [...byId.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+}
+
 function chunks(items, size) {
   const out = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
@@ -19,6 +26,19 @@ function chunks(items, size) {
 export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = {}) {
   const { url, key } = supabaseConfig();
   const enabled = Boolean(url && key && globalThis.fetch);
+  let urlHost = null;
+  try { urlHost = url ? new URL(url).host : null; } catch {}
+  const status = {
+    enabled,
+    table,
+    hasUrl: Boolean(url),
+    hasKey: Boolean(key),
+    urlHost,
+  };
+
+  logger.log(enabled
+    ? `[supabase] enabled for ${status.urlHost}/${table}`
+    : `[supabase] disabled; SUPABASE_URL present=${status.hasUrl}, key present=${status.hasKey}`);
 
   async function request(path, options = {}) {
     const res = await fetch(`${url}/rest/v1/${path}`, {
@@ -48,8 +68,10 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
       const rows = await request(
         `${table}?scope=eq.${encodeURIComponent(scope)}&select=record&order=ts.desc&limit=5000`
       );
-      logger.log(`[supabase] loaded ${rows?.length || 0} ${scope} record(s)`);
-      return (rows || []).map(row => row.record).filter(Boolean);
+      const remoteRecords = (rows || []).map(row => row.record).filter(Boolean);
+      const merged = mergeRecords(remoteRecords, fallbackRecords);
+      logger.log(`[supabase] loaded ${remoteRecords.length} remote ${scope} record(s), merged ${merged.length}`);
+      return merged;
     } catch (error) {
       logger.warn(`[supabase] load ${scope} failed; using local JSON fallback: ${error.message}`);
       return fallbackRecords;
@@ -58,6 +80,7 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
 
   async function saveRecords(scope, records = []) {
     if (!enabled) return false;
+    if (!records.length) return true;
 
     const rows = records.map(record => ({
       scope,
@@ -82,5 +105,22 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
     }
   }
 
-  return { enabled, table, loadRecords, saveRecords };
+  async function health(scopes = []) {
+    if (!enabled) return { ...status, ok: false, reason: 'missing_supabase_env' };
+
+    try {
+      const sampleRows = {};
+      for (const scope of scopes) {
+        const rows = await request(
+          `${table}?scope=eq.${encodeURIComponent(scope)}&select=id&limit=1`
+        );
+        sampleRows[scope] = rows?.length ?? 0;
+      }
+      return { ...status, ok: true, sampleRows };
+    } catch (error) {
+      return { ...status, ok: false, error: error.message };
+    }
+  }
+
+  return { enabled, table, status, loadRecords, saveRecords, health };
 }

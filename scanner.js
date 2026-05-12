@@ -148,6 +148,8 @@ dedupFile(WINS_FILE,   r => r.gainMultiple ?? 0);
 dedupFile(MISSES_FILE, r => r.peakGainPct  ?? 0);
 if (dedupRecords(db.wins, r => r.gainMultiple ?? 0)) saveRecords('wins', WINS_FILE, db.wins);
 if (dedupRecords(db.misses, r => r.peakGainPct ?? 0)) saveRecords('misses', MISSES_FILE, db.misses);
+await recordStore.saveRecords('wins', db.wins.records);
+await recordStore.saveRecords('misses', db.misses.records);
 
 function signalTier(score, maxScore) {
   const n = (score ?? 0) / (maxScore || 10);
@@ -1384,6 +1386,23 @@ const dashServer = http.createServer(async (req, res) => {
     });
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(payload);
+    return;
+  }
+
+  if (url === '/api/health') {
+    const supabase = await recordStore.health(['wins', 'misses', 'calls']);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({
+      ok: true,
+      scanner: 'signd',
+      uptimeSec: Math.round(process.uptime()),
+      supabase,
+      local: {
+        wins: db.wins.records.length,
+        misses: db.misses.records.length,
+      },
+      updatedAt: Date.now(),
+    }));
     return;
   }
 

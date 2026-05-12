@@ -253,6 +253,7 @@ function persistSignal(entry, type, status = 'watching') {
   const token = entry.token;
   const existing = db.signals.records.find(r => r.id === `${type}:${token.address}`);
   const fee = entry.fee ?? feeProfile(token);
+  const market = marketSnapshot(entry);
   const record = {
     id:          `${type}:${token.address}`,
     ts:          existing?.ts ?? entry.addedAt ?? Date.now(),
@@ -266,8 +267,13 @@ function persistSignal(entry, type, status = 'watching') {
     score:       entry.score ?? null,
     maxScore:    entry.maxScore ?? null,
     reasons:     entry.reasons ?? [],
-    entryMC:     entry.entryMC ?? token.usd_market_cap ?? 0,
-    marketCap:   token.usd_market_cap ?? null,
+    entryMC:     market.baseMC,
+    currentMC:   market.currentMC,
+    marketCap:   market.currentMC,
+    firstOpen:   entry.firstOpen ?? null,
+    currentClose: entry.currentClose ?? null,
+    gainPct:     market.gainPct !== null ? parseFloat(market.gainPct.toFixed(2)) : null,
+    peakMC:      market.peakMC,
     liquidity:   token.liquidity ?? null,
     smartMoney:  token.smart_degen_count ?? null,
     kol:         token.renowned_count ?? null,
@@ -437,6 +443,31 @@ function candlesSinceEntry(candles, entry) {
 
 function maxCandleHigh(candles) {
   return Math.max(0, ...candles.map(c => parseFloat(c.high) || 0));
+}
+
+function updateEntrySnapshot(entry, token) {
+  entry.latestMarketCap = token.usd_market_cap ?? entry.latestMarketCap ?? null;
+  entry.token = { ...entry.token, ...token };
+}
+
+function klineStartForEntry(entry) {
+  return entry.entryTs ?? Math.max(0, (entry.addedAt ?? Date.now()) - 2 * 60_000);
+}
+
+function marketSnapshot(entry) {
+  const baseMC = entry.entryMC ?? entry.token?.usd_market_cap ?? 0;
+  const currentMC = entry.firstOpen && entry.currentClose && baseMC
+    ? Math.round((entry.currentClose / entry.firstOpen) * baseMC)
+    : Math.round(entry.latestMarketCap ?? entry.token?.usd_market_cap ?? baseMC);
+  const observedPeakMC = entry.peakHigh && entry.firstOpen && baseMC
+    ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
+    : null;
+  const peakMC = observedPeakMC && observedPeakMC > baseMC ? observedPeakMC : null;
+  const gainPct = entry.firstOpen && entry.currentClose
+    ? ((entry.currentClose - entry.firstOpen) / entry.firstOpen) * 100
+    : null;
+
+  return { baseMC, currentMC, peakMC, gainPct };
 }
 
 // ─── Telegram ────────────────────────────────────────────────────────────────
@@ -782,8 +813,8 @@ async function scan() {
   for (const token of tokens) {
     if (watchlist.has(token.address)) {
       const entry = watchlist.get(token.address);
-      entry.latestMarketCap = token.usd_market_cap ?? entry.latestMarketCap ?? null;
-      entry.token = { ...entry.token, ...token };
+      updateEntrySnapshot(entry, token);
+      persistSignal(entry, 'new_creation', entry.hitAt ? 'hit' : 'watching');
       continue;
     }
     if (alerted.has(token.address)) continue;
@@ -820,7 +851,7 @@ async function scan() {
   for (const [addr, entry] of watchlist) {
     await sleep(CONFIG.klineDelayMs);
 
-    const kline   = fetchKline(addr, entry.token.created_timestamp);
+    const kline   = fetchKline(addr, klineStartForEntry(entry));
     const candles = kline?.list ?? [];
     if (candles.length === 0) continue;
 
@@ -856,6 +887,7 @@ async function scan() {
     // Track true peak using candle highs (not just close), covering intraday wicks
     const batchPeakHigh = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHigh > entry.peakHigh) entry.peakHigh = batchPeakHigh;
+    persistSignal(entry, 'new_creation', entry.hitAt ? 'hit' : 'watching');
     const gainPct      = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (currentClose / entry.firstOpen).toFixed(2);
     const peakGainPct  = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
@@ -1108,6 +1140,13 @@ async function scanMigrated() {
   for (const token of tokens) {
     const addr = token.address;
 
+    if (migratedWatch.has(addr)) {
+      const entry = migratedWatch.get(addr);
+      updateEntrySnapshot(entry, token);
+      persistSignal(entry, 'completed', entry.lastMultiple > 1 ? 'hit' : 'watching');
+      continue;
+    }
+
     // Skip stale tokens
     const migratedAt = token.complete_timestamp ?? token.open_timestamp ?? 0;
     if (migratedAt < cutoff) continue;
@@ -1143,6 +1182,7 @@ async function scanMigrated() {
       token,
       fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
+      latestMarketCap: token.usd_market_cap ?? null,
       addedAt:      Date.now(),
       entryTs:      null,
       firstOpen:    null,
@@ -1159,8 +1199,7 @@ async function scanMigrated() {
   for (const [addr, entry] of migratedWatch) {
     await sleep(MIGRATION_CONFIG.klineDelayMs);
 
-    const sinceTs = entry.token.created_timestamp ?? (Math.floor(Date.now() / 1000) - 7200);
-    const kline   = fetchKline(addr, sinceTs);
+    const kline   = fetchKline(addr, klineStartForEntry(entry));
     const candles = kline?.list ?? [];
     if (candles.length === 0) continue;
 
@@ -1177,6 +1216,7 @@ async function scanMigrated() {
     if (!entry.peakClose || currentClose > entry.peakClose) entry.peakClose = currentClose;
     const batchPeakHighM = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHighM > entry.peakHigh) entry.peakHigh = batchPeakHighM;
+    persistSignal(entry, 'completed', entry.lastMultiple > 1 ? 'hit' : 'watching');
     const gainPct       = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple  = (currentClose / entry.firstOpen).toFixed(2);
     const peakGainPct   = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
@@ -1381,6 +1421,13 @@ async function scanNearCompletion() {
 
   for (const token of tokens) {
     const addr = token.address;
+    if (nearComplWatch.has(addr)) {
+      const entry = nearComplWatch.get(addr);
+      updateEntrySnapshot(entry, token);
+      persistSignal(entry, 'near_completion', entry.lastMultiple > 1 ? 'hit' : 'watching');
+      continue;
+    }
+
     if (seenNearCompl.has(addr)) continue;
     seenNearCompl.add(addr);
 
@@ -1404,6 +1451,7 @@ async function scanNearCompletion() {
       token,
       fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
+      latestMarketCap: token.usd_market_cap ?? null,
       addedAt:      Date.now(),
       entryTs:      null,
       firstOpen:    null,
@@ -1420,8 +1468,7 @@ async function scanNearCompletion() {
   for (const [addr, entry] of nearComplWatch) {
     await sleep(NEAR_COMPLETION_CONFIG.klineDelayMs);
 
-    const sinceTs = entry.token.created_timestamp ?? (Math.floor(Date.now() / 1000) - 7200);
-    const kline   = fetchKline(addr, sinceTs);
+    const kline   = fetchKline(addr, klineStartForEntry(entry));
     const candles = kline?.list ?? [];
     if (!candles.length) continue;
 
@@ -1437,6 +1484,7 @@ async function scanNearCompletion() {
     if (!entry.peakClose || current > entry.peakClose) entry.peakClose = current;
     const batchPeakHighN = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHighN > entry.peakHigh) entry.peakHigh = batchPeakHighN;
+    persistSignal(entry, 'near_completion', entry.lastMultiple > 1 ? 'hit' : 'watching');
     const gainPct      = ((current - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (current / entry.firstOpen).toFixed(2);
     const peakGainPct  = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
@@ -1463,9 +1511,8 @@ async function scanNearCompletion() {
 const DASHBOARD_PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000');
 
 function serializeWatchlistEntry(address, entry) {
-  const gainPct = entry.firstOpen && entry.currentClose
-    ? ((entry.currentClose - entry.firstOpen) / entry.firstOpen) * 100
-    : null;
+  const market = marketSnapshot(entry);
+  const gainPct = market.gainPct;
   // Client-side rating score (simplified mirror of dashboard logic, max 10)
   const t  = entry.token;
   const br = t.bundler_trader_amount_rate ?? 1;
@@ -1483,29 +1530,20 @@ function serializeWatchlistEntry(address, entry) {
   s += Math.min(fee.scoreBonus, 2);
   const score = Math.min(s, 10);
   const action = getAction(score, 10);
-  const baseMC = entry.entryMC ?? t.usd_market_cap ?? 0;
-  const currentMC = entry.firstOpen && entry.currentClose && baseMC
-    ? Math.round((entry.currentClose / entry.firstOpen) * baseMC)
-    : Math.round(entry.latestMarketCap ?? t.usd_market_cap ?? baseMC);
-  const observedPeakMC = entry.peakHigh && entry.firstOpen && baseMC
-    ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
-    : null;
-  const peakMC = observedPeakMC && observedPeakMC > baseMC ? observedPeakMC : null;
-
   return {
     address,
     symbol:       t.symbol,
     name:         t.name,
-    entryMC:      baseMC,
-    currentMC,
-    marketCap:    currentMC,
+    entryMC:      market.baseMC,
+    currentMC:    market.currentMC,
+    marketCap:    market.currentMC,
     liquidity:    t.liquidity,
     createdAt:    t.created_timestamp,
     addedAt:      entry.addedAt,
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
-    peakMC,
+    peakMC:       market.peakMC,
     hitAt:        entry.hitAt ?? null,
     bundlerRate:  t.bundler_trader_amount_rate,
     bundlerHold:  t.bundler_mhr,
@@ -1532,36 +1570,27 @@ function serializeWatchlist(map) {
 }
 
 function serializeGraduationEntry(address, entry, type) {
-  const gainPct = entry.firstOpen && entry.currentClose
-    ? ((entry.currentClose - entry.firstOpen) / entry.firstOpen) * 100
-    : null;
+  const market = marketSnapshot(entry);
+  const gainPct = market.gainPct;
   const score     = entry.score ?? 0;
   const maxScore  = type === 'near_completion' ? NEAR_COMPL_MAX_SCORE : 42;
   const action    = getAction(score, maxScore);
   const fee       = entry.fee ?? feeProfile(entry.token);
-  const baseMC    = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
-  const currentMC = entry.firstOpen && entry.currentClose && baseMC
-    ? Math.round((entry.currentClose / entry.firstOpen) * baseMC)
-    : Math.round(entry.latestMarketCap ?? entry.token.usd_market_cap ?? baseMC);
-  const observedPeakMC = entry.peakHigh && entry.firstOpen && baseMC
-    ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
-    : null;
-  const peakMC    = observedPeakMC && observedPeakMC > baseMC ? observedPeakMC : null;
   return {
     address,
     type,
     symbol:       entry.token.symbol,
     name:         entry.token.name,
-    entryMC:      baseMC,
-    currentMC,
-    marketCap:    currentMC,
+    entryMC:      market.baseMC,
+    currentMC:    market.currentMC,
+    marketCap:    market.currentMC,
     liquidity:    entry.token.liquidity,
     createdAt:    entry.token.created_timestamp,
     addedAt:      entry.addedAt,
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
-    peakMC,
+    peakMC:       market.peakMC,
     lastMultiple: entry.lastMultiple,
     feeSol:       fee.sol,
     feeRoute:     fee.route,

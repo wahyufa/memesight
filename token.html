@@ -149,8 +149,10 @@ const getVol = t => {
   if (g>150) return 'extreme'; if (g>60) return 'high'; if (g>20) return 'medium'; return 'low';
 };
 const curMC = t => {
-  if (!t.marketCap) return 0;
-  return t.firstOpen&&t.currentClose&&t.firstOpen>0 ? (t.currentClose/t.firstOpen)*t.marketCap : t.marketCap;
+  if (t.currentMC) return t.currentMC;
+  const baseMC = t.entryMC || t.startMC || t.marketCap || 0;
+  if (!baseMC) return 0;
+  return t.firstOpen&&t.currentClose&&t.firstOpen>0 ? (t.currentClose/t.firstOpen)*baseMC : (t.marketCap || baseMC);
 };
 
 function typeBadge(type) {
@@ -369,9 +371,10 @@ async function load() {
 
     const signal  = getSignal(t);
     const vol     = getVol(t);
+    const startMC = t.entryMC || t.startMC || t.marketCap || 0;
     const mc      = curMC(t);
-    const peakMC  = t.peakMC || t.marketCap || mc;
-    const peakPct = t.marketCap && peakMC ? ((peakMC - t.marketCap) / t.marketCap) * 100 : null;
+    const peakMC  = t.peakMC && t.peakMC > startMC ? t.peakMC : null;
+    const peakPct = startMC && peakMC ? ((peakMC - startMC) / startMC) * 100 : null;
     const est     = PROFIT_EST[signal]?.[vol] || '—';
     const exits   = EXIT_WINDOWS[vol] || ['1hr'];
     const warnings = (t.reasons||[]).filter(r=>r.startsWith('⚠️'));
@@ -421,7 +424,7 @@ async function load() {
       <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
           <div class="text-xs text-slate-500 mb-1">Start MC</div>
-          <div class="text-xl font-bold text-slate-300">${fU(t.marketCap)}</div>
+          <div class="text-xl font-bold text-slate-300">${fU(startMC)}</div>
           <div class="text-xs text-slate-600 mt-0.5">when detected</div>
         </div>
         <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
@@ -431,7 +434,7 @@ async function load() {
         </div>
         <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">
           <div class="text-xs text-slate-500 mb-1">Peak MC</div>
-          <div class="text-xl font-bold text-emerald-400">${fU(peakMC)}</div>
+          <div class="text-xl font-bold text-emerald-400">${peakMC ? fU(peakMC) : '—'}</div>
           ${peakPct!=null?`<div class="text-xs text-emerald-500/70 mt-0.5">${peakPct>=0?'+':''}${peakPct.toFixed(1)}%</div>`:''}
         </div>
         <div class="bg-[#13161f] border border-[#1e2433] rounded-xl p-4">

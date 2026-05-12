@@ -780,7 +780,13 @@ async function scan() {
   let newAdded = 0;
   let bundlerRejected = 0; // kept for report compat
   for (const token of tokens) {
-    if (alerted.has(token.address) || watchlist.has(token.address)) continue;
+    if (watchlist.has(token.address)) {
+      const entry = watchlist.get(token.address);
+      entry.latestMarketCap = token.usd_market_cap ?? entry.latestMarketCap ?? null;
+      entry.token = { ...entry.token, ...token };
+      continue;
+    }
+    if (alerted.has(token.address)) continue;
 
     if (watchlist.size >= CONFIG.maxWatchlistSize) {
       console.log(`   🔒 Watchlist full (${CONFIG.maxWatchlistSize}), skipping $${token.symbol}`);
@@ -794,7 +800,7 @@ async function scan() {
       continue;
     }
 
-    const entry = { token, fee, entryMC: token.usd_market_cap ?? 0, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null };
+    const entry = { token, fee, entryMC: token.usd_market_cap ?? 0, latestMarketCap: token.usd_market_cap ?? null, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null };
     watchlist.set(token.address, entry);
     persistSignal(entry, 'new_creation', 'watching');
     newAdded++;
@@ -1478,15 +1484,21 @@ function serializeWatchlistEntry(address, entry) {
   const score = Math.min(s, 10);
   const action = getAction(score, 10);
   const baseMC = entry.entryMC ?? t.usd_market_cap ?? 0;
-  const peakMC = entry.peakHigh && entry.firstOpen && baseMC
+  const currentMC = entry.firstOpen && entry.currentClose && baseMC
+    ? Math.round((entry.currentClose / entry.firstOpen) * baseMC)
+    : Math.round(entry.latestMarketCap ?? t.usd_market_cap ?? baseMC);
+  const observedPeakMC = entry.peakHigh && entry.firstOpen && baseMC
     ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
-    : Math.round(baseMC);
+    : null;
+  const peakMC = observedPeakMC && observedPeakMC > baseMC ? observedPeakMC : null;
 
   return {
     address,
     symbol:       t.symbol,
     name:         t.name,
-    marketCap:    t.usd_market_cap,
+    entryMC:      baseMC,
+    currentMC,
+    marketCap:    currentMC,
     liquidity:    t.liquidity,
     createdAt:    t.created_timestamp,
     addedAt:      entry.addedAt,
@@ -1528,15 +1540,21 @@ function serializeGraduationEntry(address, entry, type) {
   const action    = getAction(score, maxScore);
   const fee       = entry.fee ?? feeProfile(entry.token);
   const baseMC    = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
-  const peakMC    = entry.peakHigh && entry.firstOpen && baseMC
+  const currentMC = entry.firstOpen && entry.currentClose && baseMC
+    ? Math.round((entry.currentClose / entry.firstOpen) * baseMC)
+    : Math.round(entry.latestMarketCap ?? entry.token.usd_market_cap ?? baseMC);
+  const observedPeakMC = entry.peakHigh && entry.firstOpen && baseMC
     ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
-    : Math.round(baseMC);
+    : null;
+  const peakMC    = observedPeakMC && observedPeakMC > baseMC ? observedPeakMC : null;
   return {
     address,
     type,
     symbol:       entry.token.symbol,
     name:         entry.token.name,
-    marketCap:    entry.token.usd_market_cap,
+    entryMC:      baseMC,
+    currentMC,
+    marketCap:    currentMC,
     liquidity:    entry.token.liquidity,
     createdAt:    entry.token.created_timestamp,
     addedAt:      entry.addedAt,

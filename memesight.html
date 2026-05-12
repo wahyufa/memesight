@@ -623,15 +623,18 @@ const EXIT_WINDOWS = {
 
 // ── Current MC estimate ──
 const curMC = coin => {
-  if (!coin.marketCap) return 0;
+  if (coin.currentMC) return coin.currentMC;
+  const baseMC = coin.entryMC || coin.startMC || coin.marketCap || 0;
+  if (!baseMC) return 0;
   if (coin.firstOpen && coin.currentClose && coin.firstOpen > 0)
-    return (coin.currentClose / coin.firstOpen) * coin.marketCap;
-  return coin.marketCap;
+    return (coin.currentClose / coin.firstOpen) * baseMC;
+  return coin.marketCap || baseMC;
 };
 
 // ── Map API token to coin spec ──
 const mapToken = (t, migratedFlag) => {
-  const mc     = curMC(t);
+  const startMC = t.entryMC || t.startMC || t.marketCap || 0;
+  const mc     = t.currentMC || (t.entryMC ? t.marketCap : curMC(t));
   const signal = getSignal(t);
   const vol    = getVolatility(t);
   const address = resolveTokenAddress(t);
@@ -640,7 +643,7 @@ const mapToken = (t, migratedFlag) => {
     ticker:       t.symbol,
     name:         t.name || t.symbol,
     contract:     address,
-    start_mc:     t.marketCap || 0,
+    start_mc:     startMC,
     market_cap:   mc,
     called_at:    t.addedAt || null,
     migrated:     migratedFlag,
@@ -662,7 +665,7 @@ const mapToken = (t, migratedFlag) => {
     twitter:      t.twitter,
     telegram:     t.telegram,
     createdAt:    t.createdAt || null,
-    peakMC:       t.peakMC || null,
+    peakMC:       t.peakMC && t.peakMC > startMC ? t.peakMC : null,
   };
 };
 

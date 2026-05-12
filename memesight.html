@@ -522,6 +522,14 @@ const fmtUSD = v => {
   if (v >= 1e3) return '$'+(v/1e3).toFixed(1)+'K';
   return '$'+Number(v).toFixed(0);
 };
+const mcDeltaPct = coin => {
+  if (!coin?.start_mc || !coin?.market_cap) return null;
+  return ((coin.market_cap - coin.start_mc) / coin.start_mc) * 100;
+};
+const deltaClass = pct =>
+  pct == null ? 'text-slate-400' : pct > 0 ? 'text-emerald-500' : pct < 0 ? 'text-red-400' : 'text-slate-400';
+const fmtDelta = pct =>
+  pct == null ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
 
 const timeAgo = ts => {
   const s = Math.floor((Date.now()-ts)/1000);
@@ -884,6 +892,7 @@ function renderWatchlist(list) {
     const warnings = getWarnings(c);
     const est      = getProfitEst(c.buy_signal, c.volatility);
     const exitNote = EXIT_REASONS[c.volatility] || '';
+    const nowDelta = mcDeltaPct(c);
     return `
     <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors">
       <td class="px-3 py-2.5 text-slate-400 text-xs">${i + 1}</td>
@@ -926,7 +935,7 @@ function renderWatchlist(list) {
       <!-- MC Now -->
       <td class="px-3 py-2.5">
         <div class="font-semibold text-[#0a1b33] text-sm">${fmtUSD(c.market_cap)}</div>
-        ${c.gainPct != null ? `<div class="text-xs ${c.gainPct >= 0 ? 'text-emerald-500' : 'text-red-400'}">${c.gainPct >= 0 ? '+' : ''}${c.gainPct.toFixed(1)}%</div>` : ''}
+        ${nowDelta != null ? `<div class="text-xs ${deltaClass(nowDelta)}">${fmtDelta(nowDelta)} vs start</div>` : ''}
       </td>
 
       <!-- Peak MC -->
@@ -1271,7 +1280,8 @@ function renderMobileCards(list) {
   if (!list.length) { el.innerHTML = '<div class="text-center py-16 text-slate-400 text-sm">No tokens match filters.</div>'; return; }
   el.innerHTML = list.map(c => {
     const sigCls = c.buy_signal === 'STRONG' ? 'signal-strong' : c.buy_signal === 'MEDIUM' ? 'signal-medium' : 'signal-low';
-    const gainColor = (c.gainPct ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
+    const nowDelta = mcDeltaPct(c);
+    const gainColor = deltaClass(nowDelta);
     return `
     <div class="rounded-2xl border border-slate-200/60 dark:border-[#2a2d3a] bg-white dark:bg-[#1a1d27] p-4 shadow-sm">
       <div class="flex items-center gap-3 mb-3">
@@ -1293,7 +1303,7 @@ function renderMobileCards(list) {
         <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
           <div class="text-slate-400 mb-0.5">Now</div>
           <div class="font-semibold ${gainColor}">${fmtUSD(c.market_cap)}</div>
-          ${c.gainPct != null ? `<div class="text-xs ${gainColor}">${c.gainPct >= 0 ? '+' : ''}${c.gainPct.toFixed(1)}%</div>` : ''}
+          ${nowDelta != null ? `<div class="text-xs ${gainColor}">${fmtDelta(nowDelta)}</div>` : ''}
         </div>
         <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
           <div class="text-slate-400 mb-0.5">Peak</div>

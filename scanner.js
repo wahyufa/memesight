@@ -410,11 +410,18 @@ function fetchTrenches() {
   );
 }
 
+function klineTimestampMs(value, fallbackMs = Date.now() - 2 * 3_600_000) {
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) return n > 1_000_000_000_000 ? n : n * 1000;
+  return fallbackMs;
+}
+
 function fetchKline(address, fromTs) {
-  const now = Math.floor(Date.now() / 1000);
+  const fromMs = klineTimestampMs(fromTs);
+  const toMs = Date.now();
   return gmgn(
     `market kline --chain sol --address ${address}` +
-    ` --resolution 1m --from ${fromTs} --to ${now}`
+    ` --resolution 1m --from ${fromMs} --to ${toMs}`
   );
 }
 

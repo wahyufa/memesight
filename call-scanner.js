@@ -157,9 +157,16 @@ function gmgn(args) {
   }
 }
 
+function klineTimestampMs(value, fallbackMs = Date.now() - 2 * 3_600_000) {
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) return n > 1_000_000_000_000 ? n : n * 1000;
+  return fallbackMs;
+}
+
 function fetchKline(address, sinceTs) {
-  const now = Math.floor(Date.now() / 1000);
-  return gmgn(`market kline --chain sol --address ${address} --resolution 1m --from ${sinceTs} --to ${now}`);
+  const fromMs = klineTimestampMs(sinceTs);
+  const toMs = Date.now();
+  return gmgn(`market kline --chain sol --address ${address} --resolution 1m --from ${fromMs} --to ${toMs}`);
 }
 
 function candleTimeMs(candle) {
@@ -299,7 +306,7 @@ function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, 
     type,
     mcAtCall:      Math.round(mcAtCall),
     entryClose:    null,
-    sinceTs:       Math.floor(now / 1000) - 60, // 1 min before call → kline start
+    sinceTs:       now - 60_000, // 1 min before call -> kline start
     signal,
     estRange,
     estLow,
@@ -352,8 +359,7 @@ function recoverSnapshots(call, candles) {
   if (!call.entryClose || !candles.length || !call.snapshots) return;
   for (const snap of call.snapshots) {
     if (snap.mc !== null) continue;
-    const dueSec     = Math.floor(snap.dueAt / 1000);
-    const candidates = candles.filter(c => parseInt(c.time) <= dueSec);
+    const candidates = candles.filter(c => candleTimeMs(c) <= snap.dueAt);
     if (!candidates.length) continue;
     const close = parseFloat(candidates[candidates.length - 1].close);
     if (!close) continue;
@@ -373,6 +379,7 @@ async function settleStale() {
     // Migrate: add snapshots for calls created before this feature
     if (!call.snapshots) call.snapshots = buildSnapshots(call.ts);
 
+    call.sinceTs = klineTimestampMs(call.sinceTs, (call.ts || Date.now()) - 60_000);
     const kline   = fetchKline(call.address, call.sinceTs);
     const candles = kline?.list ?? [];
 
@@ -382,8 +389,7 @@ async function settleStale() {
       }
       if (call.entryClose) {
         // Peak within exit window only
-        const exitSec       = Math.floor(call.exitWindowEnd / 1000);
-        const windowCandles = candles.filter(c => parseInt(c.time) <= exitSec);
+        const windowCandles = candles.filter(c => candleTimeMs(c) <= call.exitWindowEnd);
         if (windowCandles.length) {
           const peakHigh = maxHighBetween(windowCandles, call.ts, call.exitWindowEnd);
           if (peakHigh > 0) updatePeakMC(call, (peakHigh / call.entryClose) * call.mcAtCall);
@@ -600,6 +606,7 @@ async function monitorCalls() {
     if (!call.snapshots) call.snapshots = buildSnapshots(call.ts);
 
     await sleep(KLINE_DELAY_MS);
+    call.sinceTs = klineTimestampMs(call.sinceTs, (call.ts || Date.now()) - 60_000);
     const kline   = fetchKline(call.address, call.sinceTs);
     call.lastCheckedAt = Date.now();
     needsSave = true;

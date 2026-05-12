@@ -3,6 +3,7 @@
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { createRecordStore } from './src/lib/record-store.js';
 
 /**
  * Pump.fun 2x Scanner Bot
@@ -79,7 +80,11 @@ let   lastUpdateId = 0;
 const DATA_DIR    = path.join(__dirname, 'data');
 const WINS_FILE   = path.join(DATA_DIR, 'wins.json');
 const MISSES_FILE = path.join(DATA_DIR, 'misses.json');
+const CALLS_FILE  = path.join(DATA_DIR, 'calls.json');
 const MAX_RECORDS = 2000;
+const recordStore = createRecordStore();
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function loadJSON(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { records: [] }; }
@@ -89,7 +94,29 @@ function saveJSON(file, data) {
   try { fs.writeFileSync(file, JSON.stringify(data), 'utf8'); } catch (e) { console.error('save error:', e.message); }
 }
 
+function saveRecords(scope, file, data) {
+  saveJSON(file, data);
+  void recordStore.saveRecords(scope, data.records);
+}
+
 // ─── Dedup on startup ─────────────────────────────────────────────────────────
+function dedupRecords(raw, keepKey) {
+  if (!raw.records?.length) return false;
+
+  const map = new Map();
+  for (const r of raw.records) {
+    const existing = map.get(r.address);
+    if (!existing || keepKey(r) > keepKey(existing)) map.set(r.address, r);
+  }
+
+  const before = raw.records.length;
+  raw.records = [...map.values()].sort((a, b) => b.ts - a.ts);
+  if (raw.records.length >= before) return false;
+
+  raw.updatedAt = Date.now();
+  return true;
+}
+
 function dedupFile(file, keepKey) {
   try {
     const raw = loadJSON(file);
@@ -114,11 +141,13 @@ const db = {
   misses: loadJSON(MISSES_FILE),
 };
 
+db.wins.records = await recordStore.loadRecords('wins', db.wins.records);
+db.misses.records = await recordStore.loadRecords('misses', db.misses.records);
+
 dedupFile(WINS_FILE,   r => r.gainMultiple ?? 0);
 dedupFile(MISSES_FILE, r => r.peakGainPct  ?? 0);
-// reload after dedup
-db.wins   = loadJSON(WINS_FILE);
-db.misses = loadJSON(MISSES_FILE);
+if (dedupRecords(db.wins, r => r.gainMultiple ?? 0)) saveRecords('wins', WINS_FILE, db.wins);
+if (dedupRecords(db.misses, r => r.peakGainPct ?? 0)) saveRecords('misses', MISSES_FILE, db.misses);
 
 function signalTier(score, maxScore) {
   const n = (score ?? 0) / (maxScore || 10);
@@ -128,7 +157,7 @@ function signalTier(score, maxScore) {
 }
 
 function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice) {
-  const mc    = entry.token.usd_market_cap ?? 0;
+  const mc    = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
   const curMC = entryPrice > 0 ? (currentPrice / entryPrice) * mc : mc;
 
   const existing = db.wins.records.find(r => r.address === entry.token.address);
@@ -160,7 +189,7 @@ function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice
   }
 
   db.wins.updatedAt = Date.now();
-  saveJSON(WINS_FILE, db.wins);
+  saveRecords('wins', WINS_FILE, db.wins);
 }
 
 function persistMiss(entry, type) {
@@ -181,7 +210,7 @@ function persistMiss(entry, type) {
   db.misses.records.push(record);
   if (db.misses.records.length > MAX_RECORDS) db.misses.records = db.misses.records.slice(-MAX_RECORDS);
   db.misses.updatedAt = Date.now();
-  saveJSON(MISSES_FILE, db.misses);
+  saveRecords('misses', MISSES_FILE, db.misses);
 }
 
 function computeStats() {
@@ -221,10 +250,25 @@ function computeStats() {
 
   const overall = bucketSets(db.wins.records, db.misses.records);
 
+  // ROI across ALL calls: wins use gainPct/gainMultiple, misses use peakGainPct
+  const allGainPcts = [
+    ...db.wins.records.map(r => r.gainPct ?? 0),
+    ...db.misses.records.map(r => r.peakGainPct ?? 0),
+  ];
+  const allMults = [
+    ...db.wins.records.map(r => r.gainMultiple ?? 1),
+    ...db.misses.records.map(r => 1 + (r.peakGainPct ?? 0) / 100),
+  ];
+  const avgROIAll = allGainPcts.length ? {
+    pct:  +(allGainPcts.reduce((s, v) => s + v, 0) / allGainPcts.length).toFixed(1),
+    mult: +(allMults.reduce((s, v) => s + v, 0) / allMults.length).toFixed(2),
+  } : null;
+
   return {
     overall,
     bySignal,
     byType,
+    avgROIAll,
     totalWins:   db.wins.records.length,
     totalMisses: db.misses.records.length,
     recentWins:  db.wins.records.slice(-20).reverse(),
@@ -558,7 +602,7 @@ async function scan() {
       continue;
     }
 
-    watchlist.set(token.address, { token, addedAt: now, firstOpen: null, currentClose: null, peakClose: null });
+    watchlist.set(token.address, { token, entryMC: token.usd_market_cap ?? 0, addedAt: now, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null });
     newAdded++;
     const bsr = (token.sells_24h > 0 ? token.buys_24h / token.sells_24h : token.buys_24h).toFixed(1);
     console.log(
@@ -607,12 +651,15 @@ async function scan() {
     const currentClose = parseFloat(candles[candles.length - 1].close);
     entry.currentClose = currentClose;
     if (!entry.peakClose || currentClose > entry.peakClose) entry.peakClose = currentClose;
+    // Track true peak using candle highs (not just close), covering intraday wicks
+    const batchPeakHigh = Math.max(...candles.map(c => parseFloat(c.high) || 0));
+    if (!entry.peakHigh || batchPeakHigh > entry.peakHigh) entry.peakHigh = batchPeakHigh;
     const gainPct      = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (currentClose / entry.firstOpen).toFixed(2);
 
     // Estimate current MC based on price ratio vs initial MC
-    const estimatedMC = entry.token.usd_market_cap
-      ? (currentClose / entry.firstOpen) * entry.token.usd_market_cap
+    const estimatedMC = entry.entryMC
+      ? (currentClose / entry.firstOpen) * entry.entryMC
       : 0;
 
     // Post-2x monitoring: if MC drops below 4k, drop silently
@@ -883,8 +930,10 @@ async function scanMigrated() {
     // Add to kline watchlist for 2x tracking
     migratedWatch.set(addr, {
       token,
+      entryMC:      token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
       firstOpen:    null,
+      peakHigh:     null,
       lastMultiple: 1,
       score,
       reasons,
@@ -910,6 +959,8 @@ async function scanMigrated() {
     const currentClose  = parseFloat(candles[candles.length - 1].close);
     entry.currentClose  = currentClose;
     if (!entry.peakClose || currentClose > entry.peakClose) entry.peakClose = currentClose;
+    const batchPeakHighM = Math.max(...candles.map(c => parseFloat(c.high) || 0));
+    if (!entry.peakHigh || batchPeakHighM > entry.peakHigh) entry.peakHigh = batchPeakHighM;
     const gainPct       = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple  = (currentClose / entry.firstOpen).toFixed(2);
     const newMultiple   = parseFloat(gainMultiple);
@@ -1128,8 +1179,10 @@ async function scanNearCompletion() {
 
     nearComplWatch.set(addr, {
       token,
+      entryMC:      token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
       firstOpen:    null,
+      peakHigh:     null,
       lastMultiple: 1,
       score,
       reasons,
@@ -1154,6 +1207,8 @@ async function scanNearCompletion() {
     const current      = parseFloat(candles[candles.length - 1].close);
     entry.currentClose = current;
     if (!entry.peakClose || current > entry.peakClose) entry.peakClose = current;
+    const batchPeakHighN = Math.max(...candles.map(c => parseFloat(c.high) || 0));
+    if (!entry.peakHigh || batchPeakHighN > entry.peakHigh) entry.peakHigh = batchPeakHighN;
     const gainPct      = ((current - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (current / entry.firstOpen).toFixed(2);
     const newMult      = parseFloat(gainMultiple);
@@ -1207,8 +1262,8 @@ function serializeWatchlistEntry(address, entry) {
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
-    peakMC:       entry.peakClose && entry.firstOpen && t.usd_market_cap
-                    ? Math.round((entry.peakClose / entry.firstOpen) * t.usd_market_cap)
+    peakMC:       entry.peakHigh && entry.firstOpen && entry.entryMC
+                    ? Math.round((entry.peakHigh / entry.firstOpen) * entry.entryMC)
                     : null,
     hitAt:        entry.hitAt ?? null,
     bundlerRate:  t.bundler_trader_amount_rate,
@@ -1252,8 +1307,8 @@ function serializeGraduationEntry(address, entry, type) {
     firstOpen:    entry.firstOpen,
     currentClose: entry.currentClose ?? null,
     gainPct:      gainPct !== null ? parseFloat(gainPct.toFixed(2)) : null,
-    peakMC:       entry.peakClose && entry.firstOpen && entry.token.usd_market_cap
-                    ? Math.round((entry.peakClose / entry.firstOpen) * entry.token.usd_market_cap)
+    peakMC:       entry.peakHigh && entry.firstOpen && entry.entryMC
+                    ? Math.round((entry.peakHigh / entry.firstOpen) * entry.entryMC)
                     : null,
     lastMultiple: entry.lastMultiple,
     score,
@@ -1283,7 +1338,7 @@ function serializeGraduationWatch() {
   return out;
 }
 
-const dashServer = http.createServer((req, res) => {
+const dashServer = http.createServer(async (req, res) => {
   // Allow cross-origin requests from Vercel-hosted frontend
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -1355,6 +1410,64 @@ const dashServer = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/api/calls') {
+    const calls = await recordStore.loadRecords('calls', loadJSON(CALLS_FILE).records);
+    const wins = calls.filter(r => r.verdict === 'W').length;
+    const losses = calls.filter(r => r.verdict === 'L').length;
+    const pending = calls.filter(r => r.verdict === 'pending').length;
+    const settled = wins + losses;
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({
+      calls: [...calls].sort((a, b) => b.ts - a.ts),
+      stats: {
+        total: calls.length,
+        wins,
+        losses,
+        pending,
+        settled,
+        winRate: settled ? +(wins / settled * 100).toFixed(1) : 0,
+      },
+      updatedAt: Date.now(),
+    }));
+    return;
+  }
+
+  if (url === '/api/export') {
+    // Full data export — all wins + misses, no limit
+    const wins   = [...db.wins.records].sort((a, b) => b.ts - a.ts);
+    const misses = [...db.misses.records].sort((a, b) => b.ts - a.ts);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ wins, misses, exportedAt: Date.now() }));
+    return;
+  }
+
+  if (url === '/api/export.csv') {
+    const winCols  = ['ts','symbol','name','type','signal','entryMC','peakMC','gainPct','gainMultiple','durationMs','score','maxScore'];
+    const missCols = ['ts','symbol','type','signal','entryMC','peakGainPct','score','maxScore'];
+    const esc = v => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s;
+    };
+    const toRow = (cols, r) => cols.map(c => esc(r[c])).join(',');
+    const lines = [
+      '=== WINS ===',
+      winCols.join(','),
+      ...db.wins.records.map(r => toRow(winCols, r)),
+      '',
+      '=== MISSES ===',
+      missCols.join(','),
+      ...db.misses.records.map(r => toRow(missCols, r)),
+    ];
+    res.writeHead(200, {
+      'Content-Type': 'text/csv',
+      'Content-Disposition': `attachment; filename="signd-export-${new Date().toISOString().slice(0,10)}.csv"`,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(lines.join('\n'));
+    return;
+  }
+
   const staticContentTypes = {
     '.html': 'text/html',
     '.js':   'text/javascript',
@@ -1367,10 +1480,14 @@ const dashServer = http.createServer((req, res) => {
   };
 
   if (url.startsWith('/assets/') || url.startsWith('/src/img/')) {
-    const rel = url.replace(/^\//, '');
-    const filePath = path.resolve(__dirname, 'dist', rel);
-    const distRoot = path.resolve(__dirname, 'dist');
-    if (!filePath.startsWith(distRoot)) {
+    const decoded = decodeURIComponent(url);
+    const isImg   = decoded.startsWith('/src/img/');
+    const base    = isImg ? path.resolve(__dirname, 'src', 'img') : path.resolve(__dirname, 'dist', 'assets');
+    const rel     = isImg ? decoded.slice('/src/img/'.length) : decoded.slice('/assets/'.length);
+    const filePath = path.resolve(base, rel);
+    const relToBase = path.relative(base, filePath);
+    const outside = relToBase === '..' || relToBase.startsWith(`..${path.sep}`) || path.isAbsolute(relToBase);
+    if (outside) {
       res.writeHead(400);
       res.end('Bad request');
       return;
@@ -1385,14 +1502,18 @@ const dashServer = http.createServer((req, res) => {
     return;
   }
 
-  if (['/','index.html','/dashboard','/dashboard.html','/memesight','/memesight.html','/token','/token.html','/scanner-config.js'].some(p => url === p || url === '/'+p)) {
+  if (['/','index.html','/dashboard','/dashboard.html','/signd','/signd.html','/memesight','/memesight.html','/call','/call.html','/token','/token.html','/scanner-config.js'].some(p => url === p || url === '/'+p)) {
     const map = {
       '/':                  path.join('dist', 'index.html'),
       '/index.html':        path.join('dist', 'index.html'),
       '/dashboard':         'memesight.html',
       '/dashboard.html':    'memesight.html',
+      '/signd':             'memesight.html',
+      '/signd.html':        'memesight.html',
       '/memesight':         'memesight.html',
       '/memesight.html':    'memesight.html',
+      '/call':              'call.html',
+      '/call.html':         'call.html',
       '/token':             'token.html',
       '/token.html':        'token.html',
       '/scanner-config.js': 'scanner-config.js',

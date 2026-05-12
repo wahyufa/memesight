@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Signd — Call List</title>
+<link rel="icon" type="image/png" href="./src/img/favicon.png"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Plus Jakarta Sans','ui-sans-serif','system-ui','sans-serif'],
+        display: ['Plus Jakarta Sans','ui-sans-serif','system-ui','sans-serif'],
+      },
+    }
+  }
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+
+  :root {
+    --bg:        #f9fafb;
+    --bg2:       #f1f5f9;
+    --surface:   #ffffff;
+    --surface2:  #f8fafc;
+    --border:    rgba(226,232,240,.7);
+    --border2:   #e2e8f0;
+    --text:      #475569;
+    --text-hi:   #0a1b33;
+    --text-dim:  #94a3b8;
+    --hdr-bg:    rgba(249,250,251,.88);
+  }
+  .dark {
+    --bg:        #13161f;
+    --bg2:       #0f1219;
+    --surface:   #1c2032;
+    --surface2:  #232840;
+    --border:    rgba(255,255,255,.07);
+    --border2:   rgba(255,255,255,.10);
+    --text:      #9babc2;
+    --text-hi:   #e8edf5;
+    --text-dim:  #4a556a;
+    --hdr-bg:    rgba(19,22,31,.92);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    transition: background .25s, color .25s;
+  }
+
+  header {
+    background: var(--hdr-bg) !important;
+    border-color: var(--border) !important;
+  }
+
+  /* ── Signal badges (spec exact colors) ── */
+  .sig-strong { background:#EAF3DE; color:#3B6D11; border:1px solid #c7e4a8; }
+  .sig-medium { background:#FAEEDA; color:#854F0B; border:1px solid #f0d4a0; }
+  .sig-low    { background:#F1EFE8; color:#5F5E5A; border:1px solid #dddbd4; }
+  .dark .sig-strong { background:rgba(22,46,9,.7);  color:#86c955; border-color:rgba(59,109,17,.5); }
+  .dark .sig-medium { background:rgba(69,36,3,.7);  color:#d4973a; border-color:rgba(133,79,11,.5); }
+  .dark .sig-low    { background:rgba(40,40,50,.7); color:#8a8a8a; border-color:rgba(95,94,90,.4); }
+
+  /* ── Timeframe badges ── */
+  .tf-very-short { background:#e0f2fe; color:#0369a1; }
+  .tf-short      { background:#e0e7ff; color:#4338ca; }
+  .tf-mid        { background:#f3e8ff; color:#7e22ce; }
+  .tf-long       { background:#fef3c7; color:#b45309; }
+  .tf-very-long  { background:#fee2e2; color:#b91c1c; }
+  .dark .tf-very-short { background:rgba(3,105,161,.18);  color:#38bdf8; }
+  .dark .tf-short      { background:rgba(67,56,202,.18);  color:#818cf8; }
+  .dark .tf-mid        { background:rgba(126,34,206,.18); color:#c084fc; }
+  .dark .tf-long       { background:rgba(180,83,9,.18);   color:#fbbf24; }
+  .dark .tf-very-long  { background:rgba(185,28,28,.18);  color:#f87171; }
+
+  /* ── Verdict badges ── */
+  .verdict-w       { background:#dcfce7; color:#16a34a; border:1px solid #bbf7d0; }
+  .verdict-l       { background:#fee2e2; color:#dc2626; border:1px solid #fecaca; }
+  .verdict-pending { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .dark .verdict-w       { background:rgba(5,46,22,.7);  color:#4ade80; border-color:rgba(22,101,52,.6); }
+  .dark .verdict-l       { background:rgba(69,10,10,.7); color:#f87171; border-color:rgba(127,29,29,.5); }
+  .dark .verdict-pending { background:rgba(30,41,59,.5); color:#7a90aa; border-color:rgba(51,65,85,.6); }
+
+  /* ── Filter pills ── */
+  .filter-pill {
+    display:inline-flex; align-items:center;
+    font-size:12px; font-weight:500;
+    padding:4px 12px; border-radius:999px;
+    border:1px solid var(--border2);
+    color:var(--text);
+    background:transparent;
+    cursor:pointer;
+    transition:all .15s;
+    white-space:nowrap;
+  }
+  .filter-pill:hover { border-color:#94a3b8; color:var(--text-hi); }
+  .filter-pill.active {
+    background:#ecfdf5; border-color:#6ee7b7; color:#065f46;
+  }
+  .dark .filter-pill.active {
+    background:rgba(5,46,22,.5); border-color:rgba(74,222,128,.3); color:#4ade80;
+  }
+
+  /* ── Table ── */
+  .call-table { background:var(--surface); }
+  .dark .call-table thead tr { background:var(--bg2) !important; }
+  .row-hover:hover { background:var(--surface2); }
+  .dark .row-hover:hover { background:var(--surface2) !important; }
+  .dark .call-wrap { background:var(--surface) !important; border-color:var(--border) !important; }
+
+  /* ── Dark overrides ── */
+  .dark [class*="bg-white"],
+  .dark [class*="bg-slate-50"] { background:var(--surface) !important; }
+  .dark [class*="bg-slate-50/80"] { background:var(--bg2) !important; }
+  .dark [class*="border-slate-200"],
+  .dark [class*="border-slate-100"] { border-color:var(--border) !important; }
+  .dark [class*="text-\[#0a1b33\]"],
+  .dark [class*="text-slate-900"],
+  .dark [class*="text-slate-700"] { color:var(--text-hi) !important; }
+  .dark [class*="text-slate-600"] { color:#7a8fa8 !important; }
+  .dark [class*="text-slate-500"] { color:#5e718a !important; }
+  .dark [class*="divide-slate"] > * + * { border-color:var(--border) !important; }
+  .dark [class*="border-slate-200/70"] { border-color:var(--border) !important; }
+  .dark .stat-strip { background:rgba(28,32,50,.7) !important; border-color:var(--border) !important; }
+
+  /* ── Responsive ── */
+  @media(max-width:767px) { .desktop-table{display:none} .mobile-cards{display:block} }
+  @media(min-width:768px) { .desktop-table{display:block} .mobile-cards{display:none} }
+
+  /* ── Misc ── */
+  ::-webkit-scrollbar { width:5px; height:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
+  .dark ::-webkit-scrollbar-thumb { background:#2a3347; }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation:fadeIn .18s ease; }
+</style>
+</head>
+<body class="text-slate-600 min-h-screen antialiased">
+
+<!-- ─── Header ─────────────────────────────────────────────────────────── -->
+<header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm">
+  <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto"/>
+      <span class="text-slate-300 dark:text-slate-600 hidden sm:block">·</span>
+      <span class="font-display font-bold text-sm text-[#0a1b33] dark:text-[#e8edf5] hidden sm:block">Call List</span>
+      <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50">BETA</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-400 hidden sm:block" id="lastUpdated">—</span>
+      <button onclick="toggleDark()"
+        class="w-9 h-9 rounded-full flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
+        <i class="ph ph-moon" style="font-size:15px" id="darkIcon"></i>
+      </button>
+      <a href="/signd"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
+        Watchlist
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- ─── Stats strip ─────────────────────────────────────────────────────── -->
+<div class="stat-strip border-b border-slate-200/60 bg-white/70">
+  <div class="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-5 flex-wrap text-xs">
+    <div class="flex items-center gap-1.5">
+      <div class="w-1.5 h-1.5 rounded-full bg-slate-400" id="statusDot"></div>
+      <span class="text-slate-500 font-medium" id="statusTxt">connecting…</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span><span class="font-semibold text-[#0a1b33] dark:text-[#e8edf5]" id="statTotal">—</span> <span class="text-slate-400">total</span></span>
+      <span><span class="font-semibold text-emerald-600" id="statW">—</span> <span class="text-slate-400">W</span></span>
+      <span><span class="font-semibold text-red-400" id="statL">—</span> <span class="text-slate-400">L</span></span>
+      <span><span class="font-semibold text-slate-400" id="statPending">—</span> <span class="text-slate-400">pending</span></span>
+    </div>
+    <div class="h-3 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block"></div>
+    <span class="hidden sm:block">Win rate: <span class="font-semibold text-[#0a1b33] dark:text-[#e8edf5]" id="statWinRate">—</span></span>
+    <div class="h-3 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block"></div>
+    <div class="hidden sm:flex items-center gap-3 text-xs">
+      <span class="text-slate-400">Accuracy:</span>
+      <span><span class="sig-strong text-xs font-bold px-1.5 py-0.5 rounded-full">S</span> <span id="tier-STRONG" class="text-slate-500">—</span></span>
+      <span><span class="sig-medium text-xs font-bold px-1.5 py-0.5 rounded-full">M</span> <span id="tier-MEDIUM" class="text-slate-500">—</span></span>
+      <span><span class="sig-low text-xs font-bold px-1.5 py-0.5 rounded-full">L</span> <span id="tier-LOW" class="text-slate-500">—</span></span>
+    </div>
+    <span class="ml-auto text-slate-400">⚠️ Not financial advice — DYOR</span>
+  </div>
+</div>
+
+<!-- ─── Main ────────────────────────────────────────────────────────────── -->
+<main class="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+
+  <!-- Section header -->
+  <div class="flex items-center gap-3 mb-5">
+    <h2 class="font-display text-base font-extrabold uppercase tracking-widest text-[#0a1b33] dark:text-[#e8edf5]">Call List</h2>
+    <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+      Live
+    </span>
+    <div class="flex-1 h-px bg-slate-200/40 dark:bg-white/5"></div>
+    <span class="text-xs text-slate-400" id="callMeta">—</span>
+  </div>
+
+  <!-- Filters -->
+  <div class="flex flex-col gap-2.5 mb-5">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-slate-500 w-20 shrink-0">Signal:</span>
+      <div class="flex gap-1.5 flex-wrap" id="sigFilters">
+        <button class="filter-pill active" data-val="all">All</button>
+        <button class="filter-pill" data-val="STRONG">STRONG</button>
+        <button class="filter-pill" data-val="MEDIUM">MEDIUM</button>
+        <button class="filter-pill" data-val="LOW">LOW</button>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-slate-500 w-20 shrink-0">Timeframe:</span>
+      <div class="flex gap-1.5 flex-wrap" id="tfFilters">
+        <button class="filter-pill active" data-val="all">All</button>
+        <button class="filter-pill" data-val="very_short">Very short</button>
+        <button class="filter-pill" data-val="short">Short</button>
+        <button class="filter-pill" data-val="mid">Mid</button>
+        <button class="filter-pill" data-val="long">Long</button>
+        <button class="filter-pill" data-val="very_long">Very long</button>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-slate-500 w-20 shrink-0">Verdict:</span>
+      <div class="flex gap-1.5 flex-wrap" id="verdictFilters">
+        <button class="filter-pill active" data-val="all">All</button>
+        <button class="filter-pill" data-val="W">W (wins)</button>
+        <button class="filter-pill" data-val="L">L (losses)</button>
+        <button class="filter-pill" data-val="pending">Pending</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop table -->
+  <div class="desktop-table call-wrap rounded-2xl border border-slate-200/60 bg-white overflow-hidden shadow-sm" style="box-shadow:0 0 0 1px rgba(16,185,129,.08),0 4px 24px -4px rgba(16,185,129,.06)">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm call-table" style="min-width:980px">
+        <thead>
+          <tr class="border-b border-slate-200/70 text-xs uppercase tracking-wider text-slate-500 bg-slate-50/80">
+            <th class="px-4 py-3 text-left w-8">#</th>
+            <th class="px-4 py-3 text-left" style="min-width:170px">Token</th>
+            <th class="px-4 py-3 text-left" style="min-width:130px">Called · MC</th>
+            <th class="px-4 py-3 text-left w-24">Signal</th>
+            <th class="px-4 py-3 text-left w-32">Est. Profit</th>
+            <th class="px-4 py-3 text-left" style="min-width:140px">Timeframe · Exit</th>
+            <th class="px-4 py-3 text-left" style="min-width:180px">Reason</th>
+            <th class="px-4 py-3 text-left w-28">Current MC</th>
+            <th class="px-4 py-3 text-left w-28">Peak MC</th>
+            <th class="px-4 py-3 text-left w-28">Verdict</th>
+          </tr>
+        </thead>
+        <tbody id="callBody">
+          <tr><td colspan="10" class="text-center py-16 text-slate-400">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Mobile cards -->
+  <div class="mobile-cards space-y-3" id="callCards">
+    <div class="text-center py-16 text-slate-400 text-sm">Loading…</div>
+  </div>
+
+</main>
+
+<script>
+// ─── API ─────────────────────────────────────────────────────────────────────
+const BASE = window.CALL_SCANNER_BASE
+  || (location.protocol === 'http:' || location.protocol === 'https:' ? location.origin : 'http://localhost:3001');
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+const fmtK = v => {
+  if (v == null || isNaN(v)) return '—';
+  if (v >= 1_000_000) return '$' + (v/1_000_000).toFixed(1) + 'M';
+  if (v >= 1_000)     return '$' + (v/1_000).toFixed(1) + 'K';
+  return '$' + v.toFixed(0);
+};
+const fmtPct = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+const timeAgo = ms => {
+  const s = Math.floor(ms/1000);
+  if (s < 60)  return s + 's ago';
+  const m = Math.floor(s/60);
+  if (m < 60)  return m + 'm ago';
+  const h = Math.floor(m/60);
+  return h + 'h' + (m%60 ? ' '+(m%60)+'m' : '') + ' ago';
+};
+const fmtTime = ts => new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
+
+const TF_LABELS = { very_short:'Very short', short:'Short', mid:'Mid', long:'Long', very_long:'Very long' };
+const TF_CLS    = { very_short:'tf-very-short', short:'tf-short', mid:'tf-mid', long:'tf-long', very_long:'tf-very-long' };
+
+// ─── Normalize API record → render-friendly shape ─────────────────────────────
+function normalize(c) {
+  return {
+    ...c,
+    ticker:      c.symbol,
+    addrDisplay: c.address ? c.address.slice(0,6) + '…' + c.address.slice(-4) : '—',
+    addrFull:    c.address ?? '',
+    msSinceCall: Date.now() - c.ts,
+    callTimeLbl: fmtTime(c.ts),
+    exitLbl:     fmtTime(c.ts) + '–' + fmtTime(c.exitWindowEnd),
+    tf:          c.timeframe,
+    grad:        c.gradMin ?? null,
+    curPct:      ((c.currentMC - c.mcAtCall) / c.mcAtCall) * 100,
+    peakPct:     c.peakPct ?? 0,
+  };
+}
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let allCalls = []; // normalized records from API
+let fSig     = 'all';
+let fTf      = 'all';
+let fVerdict = 'all';
+
+function getFiltered() {
+  return allCalls.filter(c => {
+    if (fSig     !== 'all' && c.signal  !== fSig)     return false;
+    if (fTf      !== 'all' && c.tf      !== fTf)      return false;
+    if (fVerdict !== 'all' && c.verdict !== fVerdict) return false;
+    return true;
+  });
+}
+
+// ─── Logo ───────────────────────────────────────────────────────────────────
+function logo(addr, ticker, px) {
+  const fb = ticker.slice(0,2).toUpperCase();
+  return `<div class="relative flex-shrink-0 rounded-full overflow-hidden bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600" style="width:${px}px;height:${px}px">
+    <img src="https://dd.dexscreener.com/ds-data/tokens/solana/${addr}.png"
+         class="w-full h-full object-cover absolute inset-0"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+    <div class="absolute inset-0 items-center justify-center text-xs font-bold text-slate-500 uppercase" style="display:none">${fb}</div>
+  </div>`;
+}
+
+// ─── Trajectory dots ─────────────────────────────────────────────────────────
+function trajectoryDots(snapshots) {
+  if (!snapshots?.length) return '';
+  const recorded = snapshots.filter(s => s.mc !== null);
+  if (!recorded.length) return '';
+  const dots = recorded.map(s => {
+    const cls = s.pct > 0 ? 'text-emerald-500' : s.pct < 0 ? 'text-red-400' : 'text-slate-400';
+    return `<span class="${cls}" title="${s.label}">${s.pct >= 0 ? '+' : ''}${s.pct}%</span>`;
+  }).join('<span class="text-slate-300 dark:text-slate-600"> · </span>');
+  return `<div class="text-xs mt-1 leading-relaxed">${dots}</div>`;
+}
+
+// ─── Reason lines ───────────────────────────────────────────────────────────
+function reasonLines(c) {
+  const lines = [];
+  if (c.sm)   lines.push(`· SM ${c.sm.count} <span class="text-slate-400">(${c.sm.quality})</span>`);
+  if (c.kol)  {
+    const q = c.kol.quality ? ` (${c.kol.quality})` : '';
+    lines.push(`· KOL ${c.kol.count}${q}`);
+  }
+  if (c.grad != null) {
+    const fast = c.grad < 10 ? ' <span class="text-emerald-500 font-medium">(fast)</span>' : '';
+    lines.push(`· grad ${c.grad} min${fast}`);
+  }
+  return lines.slice(0,3).map(l =>
+    `<div class="text-xs text-slate-500 dark:text-slate-400">${l}</div>`
+  ).join('');
+}
+
+// ─── Render desktop table ───────────────────────────────────────────────────
+function renderTable(list) {
+  const body = document.getElementById('callBody');
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="10" class="text-center py-16 text-slate-400">No calls match the current filters.</td></tr>`;
+    return;
+  }
+  body.innerHTML = list.map((c, i) => {
+    const sigCls     = c.signal === 'STRONG' ? 'sig-strong' : c.signal === 'MEDIUM' ? 'sig-medium' : 'sig-low';
+    const tfCls      = TF_CLS[c.tf] || 'tf-short';
+    const tfLbl      = TF_LABELS[c.tf] || c.tf;
+    const vCls       = c.verdict === 'W' ? 'verdict-w' : c.verdict === 'L' ? 'verdict-l' : 'verdict-pending';
+    const vLbl       = c.verdict === 'W' ? `W ${fmtPct(c.peakPct)}` :
+                       c.verdict === 'L' ? `L ${fmtPct(c.peakPct)}` : 'Pending';
+    const curColor   = c.curPct >= 0 ? 'text-emerald-500' : 'text-red-400';
+    const peakCell   = c.verdict === 'pending' && !c.peakMC
+      ? `<span class="text-xs text-slate-400">tracking…</span>`
+      : `<div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">${fmtK(c.peakMC)}</div>
+         <div class="text-xs text-emerald-500">${fmtPct(c.peakPct)}</div>
+         ${trajectoryDots(c.snapshots)}`;
+
+    return `
+    <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors fade-in">
+      <td class="px-4 py-3 text-xs text-slate-400">${i + 1}</td>
+
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-2.5">
+          ${logo(c.addrFull, c.ticker, 32)}
+          <div>
+            <div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">$${c.ticker}</div>
+            <a href="https://pump.fun/coin/${c.addrFull}" target="_blank" rel="noopener noreferrer"
+               class="text-xs font-mono text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">${c.addrDisplay}</a>
+          </div>
+        </div>
+      </td>
+
+      <td class="px-4 py-3">
+        <div class="text-sm text-slate-600 dark:text-slate-400">${timeAgo(c.msSinceCall)}</div>
+        <div class="text-xs text-slate-400">@ ${c.callTimeLbl} · ${fmtK(c.mcAtCall)}</div>
+      </td>
+
+      <td class="px-4 py-3">
+        <span class="${sigCls} text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">${c.signal}</span>
+      </td>
+
+      <td class="px-4 py-3">
+        <div class="text-sm font-semibold text-slate-700 dark:text-slate-300">${c.estRange}</div>
+        <div class="text-xs text-slate-400">≥${c.winThreshold}% to win</div>
+      </td>
+
+      <td class="px-4 py-3">
+        <span class="${tfCls} text-xs font-semibold px-2 py-0.5 rounded-md">${tfLbl}</span>
+        <div class="text-xs text-slate-400 mt-1 font-mono">${c.exitLbl}</div>
+      </td>
+
+      <td class="px-4 py-3">
+        <div class="space-y-0.5">${reasonLines(c)}</div>
+      </td>
+
+      <td class="px-4 py-3">
+        <div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">${fmtK(c.currentMC)}</div>
+        <div class="text-xs ${curColor}">${fmtPct(c.curPct)}</div>
+      </td>
+
+      <td class="px-4 py-3">${peakCell}</td>
+
+      <td class="px-4 py-3">
+        <span class="${vCls} text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">${vLbl}</span>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Render mobile cards ─────────────────────────────────────────────────────
+function renderCards(list) {
+  const el = document.getElementById('callCards');
+  if (!list.length) {
+    el.innerHTML = '<div class="text-center py-16 text-slate-400 text-sm">No calls match filters.</div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const sigCls   = c.signal === 'STRONG' ? 'sig-strong' : c.signal === 'MEDIUM' ? 'sig-medium' : 'sig-low';
+    const tfCls    = TF_CLS[c.tf] || 'tf-short';
+    const tfLbl    = TF_LABELS[c.tf] || c.tf;
+    const vCls     = c.verdict === 'W' ? 'verdict-w' : c.verdict === 'L' ? 'verdict-l' : 'verdict-pending';
+    const vLbl     = c.verdict === 'W' ? `W ${fmtPct(c.peakPct)}` :
+                     c.verdict === 'L' ? `L ${fmtPct(c.peakPct)}` : 'Pending';
+    const curColor = c.curPct >= 0 ? 'text-emerald-500' : 'text-red-400';
+    return `
+    <div class="rounded-2xl border border-slate-200/60 dark:border-[rgba(255,255,255,.07)] bg-white dark:bg-[#1c2032] p-4 shadow-sm fade-in">
+      <div class="flex items-center gap-3 mb-3">
+        ${logo(c.addrFull, c.ticker, 40)}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-bold text-[#0a1b33] dark:text-[#e8edf5]">$${c.ticker}</span>
+            <span class="${vCls} text-xs font-bold px-2 py-0.5 rounded-full">${vLbl}</span>
+          </div>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span class="text-xs font-mono text-slate-400">${c.addrDisplay}</span>
+            <span class="text-slate-300 dark:text-slate-600">·</span>
+            <span class="text-xs text-slate-400">${timeAgo(c.msSinceCall)}</span>
+          </div>
+        </div>
+        <span class="${sigCls} text-xs font-bold px-2 py-0.5 rounded-full shrink-0">${c.signal}</span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 text-xs mb-3">
+        <div class="bg-slate-50 dark:bg-[#0f1219] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Called MC</div>
+          <div class="font-semibold text-[#0a1b33] dark:text-slate-300">${fmtK(c.mcAtCall)}</div>
+          <div class="text-slate-400">@ ${c.callTimeLbl}</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-[#0f1219] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Current MC</div>
+          <div class="font-semibold ${curColor}">${fmtK(c.currentMC)}</div>
+          <div class="${curColor}">${fmtPct(c.curPct)}</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-[#0f1219] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Peak MC</div>
+          ${c.peakMC != null
+            ? `<div class="font-semibold text-emerald-500">${fmtK(c.peakMC)}</div>
+               <div class="text-emerald-500">${fmtPct(c.peakPct)}</div>`
+            : `<div class="text-slate-400">—</div><div class="text-slate-400"> </div>`}
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2">
+          <span class="${tfCls} font-semibold px-2 py-0.5 rounded-md">${tfLbl}</span>
+          <span class="text-slate-400 font-mono">${c.exitLbl}</span>
+        </div>
+        <div class="text-slate-400 text-right">
+          ${c.sm ? `SM ${c.sm.count} (${c.sm.quality})` : ''}${c.kol ? ` · KOL ${c.kol.count}` : ''}${c.grad != null ? ` · ${c.grad}min` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Stats ───────────────────────────────────────────────────────────────────
+function updateStats(stats, filteredLen) {
+  document.getElementById('statTotal').textContent   = stats.total   ?? '—';
+  document.getElementById('statW').textContent       = stats.wins    ?? '—';
+  document.getElementById('statL').textContent       = stats.losses  ?? '—';
+  document.getElementById('statPending').textContent = stats.pending ?? '—';
+  document.getElementById('statWinRate').textContent = stats.winRate != null ? stats.winRate + '%' : '—';
+  document.getElementById('callMeta').textContent    = `${filteredLen} of ${stats.total ?? 0} calls`;
+  document.getElementById('lastUpdated').textContent =
+    'Updated ' + new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
+
+  // Win rate per signal tier
+  const tiers = { STRONG:{w:0,l:0}, MEDIUM:{w:0,l:0}, LOW:{w:0,l:0} };
+  for (const c of allCalls) {
+    if (c.verdict === 'W') tiers[c.signal].w++;
+    else if (c.verdict === 'L') tiers[c.signal].l++;
+  }
+  ['STRONG','MEDIUM','LOW'].forEach(sig => {
+    const el = document.getElementById(`tier-${sig}`);
+    if (!el) return;
+    const { w, l } = tiers[sig];
+    const total = w + l;
+    const rate  = total ? Math.round(w/total*100) : null;
+    el.textContent = total ? `${rate}% (${w}W/${l}L)` : '—';
+  });
+}
+
+// ─── Main render ─────────────────────────────────────────────────────────────
+function render(stats) {
+  const filtered = getFiltered();
+  renderTable(filtered);
+  renderCards(filtered);
+  if (stats) updateStats(stats, filtered.length);
+}
+
+// ─── Fetch from call-scanner ─────────────────────────────────────────────────
+async function fetchCalls() {
+  setStatus('connecting…', false);
+  try {
+    const data = await fetch(BASE + '/api/calls', { cache: 'no-store' }).then(r => r.json());
+    allCalls = (data.calls ?? []).map(normalize);
+    render(data.stats);
+    setStatus('live', true);
+  } catch {
+    setStatus('offline — is call-scanner running?', false);
+    if (!allCalls.length) {
+      document.getElementById('callBody').innerHTML =
+        `<tr><td colspan="10" class="text-center py-16 text-slate-400">Cannot reach call-scanner at ${BASE}</td></tr>`;
+      document.getElementById('callCards').innerHTML =
+        `<div class="text-center py-16 text-slate-400 text-sm">Cannot reach call-scanner at ${BASE}</div>`;
+    }
+  }
+}
+
+function setStatus(msg, live) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusTxt');
+  if (dot) {
+    dot.style.background   = live ? '#34d399' : '#f87171';
+    dot.style.boxShadow    = live ? '0 0 5px #34d399' : '0 0 5px #f87171';
+  }
+  if (txt) txt.textContent = msg;
+}
+
+// ─── Filter wiring ───────────────────────────────────────────────────────────
+function wireGroup(groupId, setter) {
+  document.getElementById(groupId).querySelectorAll('.filter-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById(groupId).querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setter(btn.dataset.val);
+      render();
+    });
+  });
+}
+
+wireGroup('sigFilters',     v => fSig     = v);
+wireGroup('tfFilters',      v => fTf      = v);
+wireGroup('verdictFilters', v => fVerdict = v);
+
+// ─── Dark mode ───────────────────────────────────────────────────────────────
+const DARK_KEY = 'ms-dark';
+function applyDark(on) {
+  document.documentElement.classList.toggle('dark', on);
+  const icon = document.getElementById('darkIcon');
+  if (icon) icon.className = on ? 'ph ph-sun' : 'ph ph-moon';
+  localStorage.setItem(DARK_KEY, on ? '1' : '0');
+}
+function toggleDark() { applyDark(!document.documentElement.classList.contains('dark')); }
+applyDark(localStorage.getItem(DARK_KEY) === '1');
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+fetchCalls();
+setInterval(fetchCalls, 60_000); // refresh every 60s
+</script>
+</body>
+</html>

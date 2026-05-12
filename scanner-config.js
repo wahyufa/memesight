@@ -1,5 +1,5 @@
 /**
- * MemeSight — Scanner API configuration
+ * Signd — Scanner API configuration
  *
  * Local dev  : leave as http://localhost:3000
  * Production : change to your deployed scanner URL

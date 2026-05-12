@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import logoGreen  from './img/logo signed _ green.svg'
+import logoBlack  from './img/logo signed _ blackbg.svg'
 import { motion } from 'motion/react'
 import {
   CaretRight, Moon, Sun, Lightning, ShieldCheck, Clock,
@@ -61,12 +63,12 @@ function Hero() {
         </h1>
 
         <p className="font-sans text-[14px] md:text-[15px] text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed mb-8">
-          MemeSight watches Solana meme coins 24/7 — scoring each one based on Smart Money wallets, KOL activity, and on-chain signals. Know when to get in. Know when to get out.
+          Signd watches Solana meme coins 24/7 — scoring each one based on Smart Money wallets, KOL activity, and on-chain signals. Know when to get in. Know when to get out.
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
           <motion.a
-            href="/memesight"
+            href="/signd"
             className="inline-flex items-center gap-2 px-7 py-3 rounded-full bg-[#0a152d] dark:bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:shadow-xl transition-shadow"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
@@ -99,7 +101,7 @@ function Hero() {
               {label}
             </a>
           ))}
-          <a href="/memesight"
+          <a href="/signd"
             className="flex items-center gap-1.5 bg-white dark:bg-zinc-800 px-5 py-2 rounded-full text-[12px] font-semibold text-[#0a1b33] dark:text-white border border-slate-200/60 dark:border-zinc-600/60 shadow-sm hover:border-slate-300 dark:hover:border-zinc-500 transition-all">
             Open Dashboard <CaretRight size={11} />
           </a>
@@ -273,7 +275,7 @@ function ProofSection() {
       </div>
 
       <div className="text-center mt-8">
-        <a href="/memesight" className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors">
+        <a href="/signd" className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors">
           See all signals in the dashboard <CaretRight size={13} />
         </a>
       </div>
@@ -281,7 +283,7 @@ function ProofSection() {
   )
 }
 
-// ── Why MemeSight ─────────────────────────────────────────────────────────────
+// ── Why Signd ─────────────────────────────────────────────────────────────
 const whyItems = [
   {
     icon: Eye,
@@ -311,7 +313,7 @@ function WhySection() {
             Three reasons you'll keep coming back
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-            Most scanners are noise machines. MemeSight filters 99% of tokens before you ever see them.
+            Most scanners are noise machines. Signd filters 99% of tokens before you ever see them.
           </p>
         </div>
 
@@ -348,7 +350,7 @@ function WhySection() {
 
 // ── How It Works ──────────────────────────────────────────────────────────────
 const steps = [
-  { icon: '🔍', step: 'Step 1', title: 'Scanner detects tokens',   desc: 'Every 60 seconds, MemeSight scans new Solana tokens — filtering by Smart Money wallets, KOL activity, rug ratio, bundler rate, and graduation speed.' },
+  { icon: '🔍', step: 'Step 1', title: 'Scanner detects tokens',   desc: 'Every 60 seconds, Signd scans new Solana tokens — filtering by Smart Money wallets, KOL activity, rug ratio, bundler rate, and graduation speed.' },
   { icon: '📊', step: 'Step 2', title: 'Signals are scored',       desc: 'Each token gets a STRONG, MEDIUM, or LOW signal based on a transparent scoring model. You see the exact reasons behind every call.' },
   { icon: '⚡', step: 'Step 3', title: 'You trade with an edge',   desc: 'Open the dashboard, see what the scanner is watching, and execute directly on Pump.fun or GMGN — before the crowd.' },
 ]
@@ -363,7 +365,7 @@ function HowItWorks() {
         viewport={{ once: true, margin: '-80px' }}
         transition={{ duration: 0.6 }}
       >
-        <h2 className="font-display text-3xl md:text-4xl font-semibold text-[#0a1b33] dark:text-white mb-3 tracking-tight">How MemeSight works</h2>
+        <h2 className="font-display text-3xl md:text-4xl font-semibold text-[#0a1b33] dark:text-white mb-3 tracking-tight">How Signd works</h2>
       </motion.div>
       <div className="grid sm:grid-cols-3 gap-5">
         {steps.map((s, i) => (
@@ -440,7 +442,7 @@ const phases = [
     statusColor: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-800/40',
     active: true,
     tagline: 'For traders who need speed.',
-    items: ['Signal refresh every 1 minute instead of 60s', 'Priority access to new coin additions', 'Signal history (last 24 hours)', 'Early access to future features'],
+    items: ['Signal refresh every 15s instead of 60s', 'Priority access to new coin additions', 'Signal history (last 24 hours)', 'Early access to future features'],
   },
   {
     num: '2', title: 'AI Scoring Layer', status: 'In development',
@@ -533,7 +535,7 @@ function CTABanner() {
           </p>
           <p className="text-xs text-slate-400 dark:text-zinc-500 mb-10">⚠️ Not financial advice — DYOR.</p>
           <motion.a
-            href="/memesight"
+            href="/signd"
             className="inline-flex items-center gap-2 px-10 py-4 rounded-full bg-[#0a152d] dark:bg-emerald-600 text-white font-semibold text-base shadow-lg hover:shadow-xl transition-shadow"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
@@ -552,8 +554,9 @@ function TopNav({ dark, toggleDark }: { dark: boolean; toggleDark: () => void })
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-200/60 dark:border-zinc-800/60 backdrop-blur-sm bg-[#f9fafb]/80 dark:bg-zinc-950/80">
       <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-2 font-bold text-[#0a1b33] dark:text-white tracking-tight">
-          MemeSight <span>🚀</span>
+        <a href="/" className="flex items-center">
+          <img src={logoGreen} alt="Signd" className="h-7 w-auto dark:hidden" />
+          <img src={logoBlack} alt="Signd" className="h-7 w-auto hidden dark:block" />
         </a>
         <div className="flex items-center gap-3">
           <button
@@ -564,7 +567,7 @@ function TopNav({ dark, toggleDark }: { dark: boolean; toggleDark: () => void })
             {dark ? <Sun size={14} /> : <Moon size={14} />}
 
           </button>
-          <a href="/memesight"
+          <a href="/signd"
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#0a152d] dark:bg-emerald-600 text-white text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
             Open Dashboard
           </a>
@@ -580,15 +583,17 @@ function Footer() {
     <footer className="border-t border-slate-200/60 dark:border-zinc-800/60 mt-0">
       <div className="max-w-[1400px] mx-auto px-6 py-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
-          <div className="font-bold text-[#0a1b33] dark:text-white text-sm">
-            MemeSight 🚀 <span className="font-normal text-slate-400 dark:text-zinc-500">— Smart Money signals for Solana</span>
+          <div className="flex items-center gap-3">
+            <img src={logoGreen} alt="Signd" className="h-6 w-auto dark:hidden" />
+            <img src={logoBlack} alt="Signd" className="h-6 w-auto hidden dark:block" />
+            <span className="text-sm font-normal text-slate-400 dark:text-zinc-500">— Smart Money signals for Solana</span>
           </div>
           <p className="text-xs text-slate-400 dark:text-zinc-500 text-right max-w-sm leading-relaxed">
             <em>Algorithmic signals for informational purposes only. Not financial advice. Always do your own research.</em>
           </p>
         </div>
         <div className="border-t border-slate-200/40 dark:border-zinc-800/40 pt-5 text-xs text-center text-slate-400 dark:text-zinc-600">
-          © 2025 MemeSight
+          © 2025 Signd
         </div>
       </div>
     </footer>

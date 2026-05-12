@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>MemeSight</title>
+<title>Signd</title>
+<link rel="icon" type="image/png" href="./src/img/favicon.png"/>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <script src="/scanner-config.js"></script>
@@ -157,6 +158,9 @@ tailwind.config = {
   .dark .watchlist-table thead tr { background: var(--bg2) !important; }
   .dark .row-hover:hover { background: var(--surface2) !important; }
   .dark [class*="border-slate-200/70"] { border-color: var(--border) !important; }
+  .dark .watchlist-table[style*="box-shadow"] {
+    box-shadow: 0 0 0 1px rgba(52,211,153,.08), 0 4px 24px -4px rgba(52,211,153,.07) !important;
+  }
 
   /* ── Link buttons (pump.fun, gmgn) — fix white icon on white bg ───────── */
   .dark a[class*="bg-white"][class*="rounded-full"],
@@ -229,7 +233,8 @@ tailwind.config = {
 <header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm bg-[#f9fafb]/80">
   <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <span class="font-display text-lg font-bold text-[#0a1b33] tracking-tight">Meme<span class="text-emerald-600">Sight</span></span>
+      <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto dark:hidden"/>
+      <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto hidden dark:block"/>
       <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold">BETA</span>
     </div>
     <div class="flex items-center gap-3">
@@ -243,7 +248,7 @@ tailwind.config = {
         class="w-9 h-9 rounded-full flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
         <i class="ph ph-moon" style="font-size:15px" id="darkIcon"></i>
       </button>
-      <a href="/memesight" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
+      <a href="/signd" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
         Dashboard
       </a>
     </div>
@@ -277,36 +282,11 @@ tailwind.config = {
         </div>
       </div>
       <div class="h-10 w-px bg-slate-200"></div>
-      <div class="flex gap-5">
-        <div class="text-center">
-          <div class="text-xs font-bold text-emerald-400 mb-0.5">STRONG</div>
-          <div class="text-base font-bold text-[#0a1b33]" id="wr-strong">—</div>
-          <div class="text-xs text-slate-600" id="wr-strong-n"></div>
-        </div>
-        <div class="text-center">
-          <div class="text-xs font-bold text-amber-400 mb-0.5">MEDIUM</div>
-          <div class="text-base font-bold text-[#0a1b33]" id="wr-medium">—</div>
-          <div class="text-xs text-slate-600" id="wr-medium-n"></div>
-        </div>
-        <div class="text-center">
-          <div class="text-xs font-bold text-slate-500 mb-0.5">LOW</div>
-          <div class="text-base font-bold text-[#0a1b33]" id="wr-low">—</div>
-          <div class="text-xs text-slate-600" id="wr-low-n"></div>
-        </div>
-      </div>
-      <div class="h-10 w-px bg-slate-200 hidden sm:block"></div>
-      <div class="flex gap-5 hidden sm:flex">
-        <div class="text-center">
-          <div class="text-xs text-slate-500 mb-0.5">New Creation</div>
-          <div class="text-sm font-semibold text-[#0a1b33]" id="wr-new">—</div>
-        </div>
-        <div class="text-center">
-          <div class="text-xs text-slate-500 mb-0.5">Near Grad</div>
-          <div class="text-sm font-semibold text-[#0a1b33]" id="wr-near">—</div>
-        </div>
-        <div class="text-center">
-          <div class="text-xs text-slate-500 mb-0.5">Graduated</div>
-          <div class="text-sm font-semibold text-[#0a1b33]" id="wr-grad">—</div>
+      <div>
+        <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Avg ROI · all calls</div>
+        <div class="flex items-baseline gap-2">
+          <span class="text-2xl font-bold text-emerald-500" id="wr-avg-mult">—</span>
+          <span class="text-sm text-emerald-400" id="wr-avg-gain"></span>
         </div>
       </div>
       <div class="ml-auto flex items-center gap-4">
@@ -353,8 +333,14 @@ tailwind.config = {
   <!-- ─── Section 2: Watchlist ──────────────────────────────────────────── -->
   <section>
     <div class="flex items-center gap-3 mb-4">
-      <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500">Watchlist</h2>
-      <div class="flex-1 h-px bg-slate-200/25"></div>
+      <div class="flex items-center gap-2.5">
+        <h2 class="font-display text-base font-extrabold uppercase tracking-widest text-[#0a1b33] dark:text-[#e8edf5]">Watchlist</h2>
+        <span class="live-badge inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+          Live
+        </span>
+      </div>
+      <div class="flex-1 h-px bg-slate-200/40 dark:bg-white/5"></div>
       <span class="text-xs text-slate-400" id="watchlistMeta">—</span>
     </div>
 
@@ -426,7 +412,7 @@ tailwind.config = {
     </div>
 
     <!-- Desktop table -->
-    <div class="watchlist-table rounded-2xl border border-slate-200/60 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] overflow-hidden shadow-sm">
+    <div class="watchlist-table rounded-2xl border border-slate-200/60 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] overflow-hidden shadow-sm" style="box-shadow:0 0 0 1px rgba(16,185,129,.08),0 4px 24px -4px rgba(16,185,129,.06)">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -467,9 +453,11 @@ tailwind.config = {
     <div class="flex items-center gap-3 mb-4">
       <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-600">Near-Misses</h2>
       <div class="flex-1 h-px bg-slate-200/25 dark:bg-[#2a2d3a]"></div>
-      <span class="text-xs text-slate-400">tokens that expired without hitting target · sorted by peak gain</span>
+      <button id="missToggle" class="text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:border-slate-300 hover:text-slate-700 dark:hover:text-slate-200 transition-all flex items-center gap-1.5">
+        Show <span id="missChevron">▼</span>
+      </button>
     </div>
-    <div class="rounded-2xl border border-slate-200/60 dark:border-[#2a2d3a] bg-white dark:bg-[#1a1d27] overflow-hidden shadow-sm">
+    <div id="missTable" class="hidden rounded-2xl border border-slate-200/60 dark:border-[#2a2d3a] bg-white dark:bg-[#1a1d27] overflow-hidden shadow-sm">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -1049,18 +1037,18 @@ async function loadStats() {
     const s = await fetch(BASE + '/api/stats').then(r => r.json());
     if (s.overall.total === 0) return;
     document.getElementById('winRateBar').classList.remove('hidden');
-    document.getElementById('wr-overall').textContent        = s.overall.rate + '%';
-    document.getElementById('wr-overall-total').textContent  = `${s.overall.wins}W / ${s.overall.total - s.overall.wins}L`;
-    document.getElementById('wr-strong').textContent         = (s.bySignal.STRONG?.rate ?? '—') + '%';
-    document.getElementById('wr-strong-n').textContent       = `${s.bySignal.STRONG?.wins ?? 0}/${s.bySignal.STRONG?.total ?? 0}`;
-    document.getElementById('wr-medium').textContent         = (s.bySignal.MEDIUM?.rate ?? '—') + '%';
-    document.getElementById('wr-medium-n').textContent       = `${s.bySignal.MEDIUM?.wins ?? 0}/${s.bySignal.MEDIUM?.total ?? 0}`;
-    document.getElementById('wr-low').textContent            = (s.bySignal.LOW?.rate ?? '—') + '%';
-    document.getElementById('wr-low-n').textContent          = `${s.bySignal.LOW?.wins ?? 0}/${s.bySignal.LOW?.total ?? 0}`;
-    document.getElementById('wr-new').textContent            = (s.byType.new_creation?.rate  ?? '—') + '%';
-    document.getElementById('wr-near').textContent           = (s.byType.near_completion?.rate ?? '—') + '%';
-    document.getElementById('wr-grad').textContent           = (s.byType.completed?.rate ?? '—') + '%';
-    document.getElementById('wr-sessions').textContent       = s.overall.total;
+    document.getElementById('wr-overall').textContent       = s.overall.rate + '%';
+    document.getElementById('wr-overall-total').textContent = `${s.overall.wins}W / ${s.overall.total - s.overall.wins}L`;
+    document.getElementById('wr-sessions').textContent      = s.overall.total;
+
+    // AVG ROI across ALL calls: wins use gainPct, misses use peakGainPct
+    if (s.avgROIAll != null) {
+      const mult = s.avgROIAll.mult;
+      const pct  = s.avgROIAll.pct;
+      document.getElementById('wr-avg-mult').textContent = mult + 'x';
+      document.getElementById('wr-avg-gain').textContent = (pct >= 0 ? '+' : '') + pct + '%';
+    }
+
   } catch {}
 }
 
@@ -1319,6 +1307,15 @@ renderWatchlist = function(list) {
   renderMobileCards(filtered);
   checkNewSignals(filtered);
 };
+
+// ── Near-misses toggle ──
+let missOpen = false;
+document.getElementById('missToggle').addEventListener('click', () => {
+  missOpen = !missOpen;
+  document.getElementById('missTable').classList.toggle('hidden', !missOpen);
+  document.getElementById('missChevron').textContent  = missOpen ? '▲' : '▼';
+  document.getElementById('missToggle').firstChild.textContent = missOpen ? 'Hide ' : 'Show ';
+});
 
 // ── Boot ──
 fetchData();

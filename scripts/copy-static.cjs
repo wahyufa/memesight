@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const files = ['memesight.html','token.html','scanner-config.js'];
+const files = ['memesight.html','call.html','token.html','scanner-config.js'];
 files.forEach(f => {
   try { fs.copyFileSync(f, path.join('dist', f)); console.log('copied', f); }
   catch(e) { console.warn('skip', f, e.message); }

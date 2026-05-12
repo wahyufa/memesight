@@ -446,7 +446,9 @@ function maxCandleHigh(candles) {
 }
 
 function updateEntrySnapshot(entry, token) {
-  entry.latestMarketCap = token.usd_market_cap ?? entry.latestMarketCap ?? null;
+  const latestMC = token.usd_market_cap ?? null;
+  entry.latestMarketCap = latestMC ?? entry.latestMarketCap ?? null;
+  if (latestMC) entry.snapshotPeakMC = Math.max(entry.snapshotPeakMC ?? 0, latestMC);
   entry.token = { ...entry.token, ...token };
 }
 
@@ -462,7 +464,10 @@ function marketSnapshot(entry) {
   const observedPeakMC = entry.peakHigh && entry.firstOpen && baseMC
     ? Math.round((entry.peakHigh / entry.firstOpen) * baseMC)
     : null;
-  const peakMC = observedPeakMC && observedPeakMC > baseMC ? observedPeakMC : null;
+  const snapshotPeakMC = entry.snapshotPeakMC && entry.snapshotPeakMC > baseMC
+    ? Math.round(entry.snapshotPeakMC)
+    : null;
+  const peakMC = Math.max(observedPeakMC ?? 0, snapshotPeakMC ?? 0) || null;
   const gainPct = entry.firstOpen && entry.currentClose
     ? ((entry.currentClose - entry.firstOpen) / entry.firstOpen) * 100
     : null;
@@ -831,7 +836,8 @@ async function scan() {
       continue;
     }
 
-    const entry = { token, fee, entryMC: token.usd_market_cap ?? 0, latestMarketCap: token.usd_market_cap ?? null, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null };
+    const entryMC = token.usd_market_cap ?? 0;
+    const entry = { token, fee, entryMC, latestMarketCap: token.usd_market_cap ?? null, snapshotPeakMC: entryMC, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null };
     watchlist.set(token.address, entry);
     persistSignal(entry, 'new_creation', 'watching');
     newAdded++;
@@ -1183,6 +1189,7 @@ async function scanMigrated() {
       fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
       latestMarketCap: token.usd_market_cap ?? null,
+      snapshotPeakMC: token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
       entryTs:      null,
       firstOpen:    null,
@@ -1452,6 +1459,7 @@ async function scanNearCompletion() {
       fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
       latestMarketCap: token.usd_market_cap ?? null,
+      snapshotPeakMC: token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
       entryTs:      null,
       firstOpen:    null,

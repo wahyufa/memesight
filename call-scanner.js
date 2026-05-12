@@ -43,6 +43,13 @@ const NEW_CREATION_INTERVAL = 60_000;
 const MONITOR_INTERVAL_MS   = 60_000;
 const recordStore           = createRecordStore();
 
+const GLOBAL_FEE = {
+  minSol:            Number(process.env.GLOBAL_MIN_FEE_SOL || process.env.MIN_GLOBAL_FEE_SOL || 2),
+  strongSol:         Number(process.env.GLOBAL_STRONG_FEE_SOL || process.env.STRONG_GLOBAL_FEE_SOL || 10),
+  newCreationStrict: process.env.GLOBAL_FEE_NEW_CREATION_STRICT === 'true',
+  migratedStrict:    process.env.GLOBAL_FEE_MIGRATED_STRICT === 'true',
+};
+
 // Score thresholds (migration)
 const WATCH_THRESHOLD  = 3;
 const STRONG_THRESHOLD = 18;
@@ -136,6 +143,52 @@ function maxHighBetween(candles, fromMs, toMs = Infinity) {
   return Math.max(0, ...highs);
 }
 
+function firstNumber(...values) {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
+
+function tokenFeeSol(token = {}) {
+  return firstNumber(
+    token.fee_claim_sol,
+    token.distributed_sol,
+    token.distributed,
+    token.total_fee_sol,
+    token.total_fee,
+    token.total_fees,
+    token.total_fee_amount,
+    token.gmgn_total_fee_sol,
+    token.pump_total_fee_sol,
+    token.feeClaim?.distributedSol,
+    token.feeClaim?.distributed_sol,
+    token.feeClaim?.amountSol,
+    token.fee_claim?.distributed_sol
+  );
+}
+
+function feeProfile(token, { strict = false } = {}) {
+  const sol = tokenFeeSol(token);
+  const hasFee = sol !== null;
+  const passes = hasFee ? sol >= GLOBAL_FEE.minSol : !strict;
+  const isStrong = hasFee && sol >= GLOBAL_FEE.strongSol;
+  const reason = hasFee
+    ? `fee ${sol.toFixed(sol >= 10 ? 0 : 1)} SOL`
+    : 'fee unknown';
+
+  return {
+    sol,
+    hasFee,
+    passes,
+    isStrong,
+    route: isStrong ? 'fee_strong' : hasFee && passes ? 'fee_global' : hasFee ? 'fee_low' : 'fee_unknown',
+    scoreBonus: isStrong ? 3 : hasFee && passes ? 2 : 0,
+    reason,
+  };
+}
+
 // ─── Signal + timeframe helpers ───────────────────────────────────────────────
 function signalFromScore(score, maxScore) {
   if (score >= STRONG_THRESHOLD || score / maxScore >= STRONG_THRESHOLD / 42) return 'STRONG';
@@ -189,7 +242,7 @@ function calcWinThreshold(signal, estLow) {
 }
 
 // ─── Create call entry ────────────────────────────────────────────────────────
-function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, sm, kol, gradMin, reasons }) {
+function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, sm, kol, gradMin, reasons, fee }) {
   if (seenAddresses.has(address)) return null;
 
   const { estRange, estLow } = estProfit(signal, timeframe);
@@ -215,6 +268,8 @@ function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, 
     sm:            sm   ?? null,
     kol:           kol  ?? null,
     gradMin:       gradMin != null ? parseFloat(gradMin.toFixed(1)) : null,
+    feeSol:        fee?.sol ?? null,
+    feeRoute:      fee?.route ?? null,
     reasons:       reasons ?? [],
     currentMC:     Math.round(mcAtCall),
     peakMC:        Math.round(mcAtCall),
@@ -337,11 +392,14 @@ async function scanMigration() {
     if (token.is_wash_trading)                 continue;
     if ((token.top_10_holder_rate ?? 1) > 0.65) continue;
     if ((token.liquidity          ?? 0) < 500)  continue;
+    const fee = feeProfile(token, { strict: GLOBAL_FEE.migratedStrict });
+    if (!fee.passes) continue;
 
     // Score
     let score = 0;
     const reasons = [];
     if (token.creator_token_status !== 'creator_close') reasons.push('⚠️ creator holding');
+    if (fee.scoreBonus > 0) { score += fee.scoreBonus; reasons.push(fee.reason); }
 
     const smCount = token.smart_degen_count ?? 0;
     if      (smCount > 12) { score += 15; reasons.push(`SM ${smCount} (max tier)`); }
@@ -388,6 +446,7 @@ async function scanMigration() {
       sm:        smObj,
       kol:       kolObj,
       gradMin,
+      fee,
       reasons:   reasons.filter(r => !r.startsWith('⚠️')),
     });
 
@@ -409,7 +468,7 @@ async function scanNewCreation() {
     ` --launchpad-platform Pump.fun` +
     ` --max-marketcap 20000` +
     ` --min-creator-created-open-count 1` +
-    ` --min-total-fee 0.5` +
+    ` --min-total-fee ${GLOBAL_FEE.minSol}` +
     ` --max-created 10m` +
     ` --min-visiting-count 5` +
     ` --min-bundler-rate 0.15` +
@@ -435,10 +494,13 @@ async function scanNewCreation() {
     if (buys  > 0 && bsr < 1.5) continue;
     if (sells > 0 && bsr > 8.0) continue;
     if (swaps < 3) continue;
+    const fee = feeProfile(token, { strict: GLOBAL_FEE.newCreationStrict });
+    if (!fee.passes) continue;
 
     // Score (no SM/KOL/grad for new_creation)
     let score = 0;
     const reasons = [];
+    if (fee.scoreBonus > 0) { score += fee.scoreBonus; reasons.push(fee.reason); }
     if      (bsr >= 4) { score += 4; reasons.push(`buy/sell ${bsr.toFixed(1)}x`); }
     else if (bsr >= 2) { score += 2; reasons.push(`buy/sell ${bsr.toFixed(1)}x`); }
     if (bundlerHold < 0.30) { score += 2; reasons.push(`bundler ${Math.round(bundlerHold*100)}% hold`); }
@@ -464,6 +526,7 @@ async function scanNewCreation() {
       sm:       null,
       kol:      null,
       gradMin:  null,
+      fee,
       reasons,
     });
 

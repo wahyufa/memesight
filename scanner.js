@@ -45,7 +45,7 @@ const CONFIG = {
   // Step 1 — server-side filters (sent to GMGN API)
   maxMarketCap:        20000,   // raised: catch tokens that already moved from $6k to $12k
   minCreatorOpenCount: 1,       // creator must have launched at least 1 graduated token before
-  minTotalFee:         0.5,     // min 0.5 SOL fees (lower threshold for fresh tokens)
+  minTotalFee:         Number(process.env.GLOBAL_MIN_FEE_SOL || process.env.MIN_GLOBAL_FEE_SOL || 2),
   maxTokenAge:         '10m',   // token must be created within last 10 minutes
   minVisitingCount:    5,       // min 5 views on GMGN
   minBundlerRate:      0.15,    // require bundler activity (they're buying)
@@ -66,6 +66,14 @@ const CONFIG = {
   maxWatchlistSize:    10,           // max tokens tracked at once
   maxWatchlistAgeMs:   30 * 60_000,
   klineDelayMs:        300,
+};
+
+const GLOBAL_FEE = {
+  minSol:               Number(process.env.GLOBAL_MIN_FEE_SOL || process.env.MIN_GLOBAL_FEE_SOL || 2),
+  strongSol:            Number(process.env.GLOBAL_STRONG_FEE_SOL || process.env.STRONG_GLOBAL_FEE_SOL || 10),
+  newCreationStrict:    process.env.GLOBAL_FEE_NEW_CREATION_STRICT === 'true',
+  migratedStrict:       process.env.GLOBAL_FEE_MIGRATED_STRICT === 'true',
+  nearCompletionStrict: process.env.GLOBAL_FEE_NEAR_COMPLETION_STRICT === 'true',
 };
 
 // ─── Session state ────────────────────────────────────────────────────────────
@@ -188,6 +196,8 @@ function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice
       gainMultiple: parseFloat(peakGainMultiple.toFixed(2)),
       score:        entry.score ?? null,
       maxScore:     entry.maxScore ?? null,
+      feeSol:       entry.fee?.sol ?? tokenFeeSol(entry.token),
+      feeRoute:     entry.fee?.route ?? feeProfile(entry.token).route,
       durationMs:   Date.now() - entry.addedAt,
     });
     if (db.wins.records.length > MAX_RECORDS) db.wins.records = db.wins.records.slice(-MAX_RECORDS);
@@ -213,6 +223,8 @@ function persistMiss(entry, type) {
     peakGainPct: parseFloat(gainPct.toFixed(2)),
     score:      entry.score ?? null,
     maxScore:   entry.maxScore ?? null,
+    feeSol:     entry.fee?.sol ?? tokenFeeSol(entry.token),
+    feeRoute:   entry.fee?.route ?? feeProfile(entry.token).route,
     durationMs: Date.now() - entry.addedAt,
   };
   db.misses.records.push(record);
@@ -422,6 +434,52 @@ function pct(val) {
   return val != null ? `${(val * 100).toFixed(0)}%` : '—';
 }
 
+function firstNumber(...values) {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
+
+function tokenFeeSol(token = {}) {
+  return firstNumber(
+    token.fee_claim_sol,
+    token.distributed_sol,
+    token.distributed,
+    token.total_fee_sol,
+    token.total_fee,
+    token.total_fees,
+    token.total_fee_amount,
+    token.gmgn_total_fee_sol,
+    token.pump_total_fee_sol,
+    token.feeClaim?.distributedSol,
+    token.feeClaim?.distributed_sol,
+    token.feeClaim?.amountSol,
+    token.fee_claim?.distributed_sol
+  );
+}
+
+function feeProfile(token, { strict = false } = {}) {
+  const sol = tokenFeeSol(token);
+  const hasFee = sol !== null;
+  const passes = hasFee ? sol >= GLOBAL_FEE.minSol : !strict;
+  const isStrong = hasFee && sol >= GLOBAL_FEE.strongSol;
+  const reason = hasFee
+    ? `fee ${sol.toFixed(sol >= 10 ? 0 : 1)} SOL`
+    : 'fee unknown';
+
+  return {
+    sol,
+    hasFee,
+    passes,
+    isStrong,
+    route: isStrong ? 'fee_strong' : hasFee && passes ? 'fee_global' : hasFee ? 'fee_low' : 'fee_unknown',
+    scoreBonus: isStrong ? 3 : hasFee && passes ? 2 : 0,
+    reason,
+  };
+}
+
 function fmtUptime() {
   const ms = Date.now() - session.startedAt;
   const h  = Math.floor(ms / 3_600_000);
@@ -624,7 +682,14 @@ async function scan() {
       continue;
     }
 
-    watchlist.set(token.address, { token, entryMC: token.usd_market_cap ?? 0, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null });
+    const fee = feeProfile(token, { strict: GLOBAL_FEE.newCreationStrict });
+    if (!fee.passes) {
+      rejected.noFee++;
+      console.log(`   · $${token.symbol} skipped: ${fee.reason} < global ${GLOBAL_FEE.minSol} SOL`);
+      continue;
+    }
+
+    watchlist.set(token.address, { token, fee, entryMC: token.usd_market_cap ?? 0, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null });
     newAdded++;
     const bsr = (token.sells_24h > 0 ? token.buys_24h / token.sells_24h : token.buys_24h).toFixed(1);
     console.log(
@@ -776,6 +841,8 @@ function scoreMigratedToken(token) {
   if (token.is_wash_trading)                                             return { score: -1, reasons: ['wash trading detected'] };
   if ((token.top_10_holder_rate ?? 1) > MIGRATION_CONFIG.maxTop10Holder) return { score: -1, reasons: ['top10 holder concentrated'] };
   if ((token.liquidity ?? 0) < MIGRATION_CONFIG.minLiquidity)           return { score: -1, reasons: ['liquidity too low'] };
+  const fee = feeProfile(token, { strict: GLOBAL_FEE.migratedStrict });
+  if (!fee.passes) return { score: -1, reasons: [`global fee < ${GLOBAL_FEE.minSol} SOL`] };
   // creator still holding → not a hard reject, penalise score instead
 
   // ── Creator risk flag (penalty only, not rejection) ────────────────────────
@@ -784,6 +851,8 @@ function scoreMigratedToken(token) {
   }
 
   // ── Smart money (0-15 pts) ──────────────────────────────────────────────────
+  if (fee.scoreBonus > 0) { score += fee.scoreBonus; reasons.push(fee.reason); }
+
   const sm = token.smart_degen_count ?? 0;
   if      (sm > 12) { score += 15; reasons.push(`SM ${sm} (max tier)`); }
   else if (sm >= 6) { score += 12; reasons.push(`SM ${sm} (high)`); }
@@ -955,6 +1024,7 @@ async function scanMigrated() {
     // Add to kline watchlist for 2x tracking
     migratedWatch.set(addr, {
       token,
+      fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
       entryTs:      null,
@@ -1061,6 +1131,9 @@ function scoreNearCompletionToken(token) {
   // insider ratio — flag in reasons but don't hard reject
   if ((token.rat_trader_amount_rate ?? 0) > NEAR_COMPLETION_CONFIG.maxInsiderRatio)
     return { score: -1, reasons: ['insider ratio too high'] };
+  const fee = feeProfile(token, { strict: GLOBAL_FEE.nearCompletionStrict });
+  if (!fee.passes) return { score: -1, reasons: [`global fee < ${GLOBAL_FEE.minSol} SOL`] };
+  if (fee.scoreBonus > 0) { score += fee.scoreBonus; reasons.push(fee.reason); }
   // warn if elevated but below threshold
   if ((token.rat_trader_amount_rate ?? 0) > 0.30) {
     reasons.push(`⚠️ insider ${pct(token.rat_trader_amount_rate)}`);
@@ -1208,6 +1281,7 @@ async function scanNearCompletion() {
 
     nearComplWatch.set(addr, {
       token,
+      fee:          feeProfile(token),
       entryMC:      token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
       entryTs:      null,
@@ -1275,12 +1349,14 @@ function serializeWatchlistEntry(address, entry) {
   const bsr = (t.sells_24h > 0) ? t.buys_24h / t.sells_24h : (t.buys_24h ?? 0);
   const rug = t.rug_ratio ?? 1;
   const sm  = t.smart_degen_count ?? 0;
+  const fee = entry.fee ?? feeProfile(t);
   let s = 0;
   if (br >= 0.15 && br <= 0.50) s += 2;
   if (bh >= 0.20 && bh <= 0.70) s += 2;
   if (bsr >= 1.5  && bsr <= 8)  s += 2;
   if (rug < 0.10) s += 2; else if (rug < 0.25) s += 1;
   s += Math.min(sm, 2);
+  s += Math.min(fee.scoreBonus, 2);
   const score = Math.min(s, 10);
   const action = getAction(score, 10);
 
@@ -1305,6 +1381,8 @@ function serializeWatchlistEntry(address, entry) {
     sells:        t.sells_24h,
     smartMoney:   t.smart_degen_count,
     rugRatio:     t.rug_ratio,
+    feeSol:       fee.sol,
+    feeRoute:     fee.route,
     score,
     action:       action.label,
     actionIcon:   action.icon,
@@ -1328,6 +1406,7 @@ function serializeGraduationEntry(address, entry, type) {
   const score     = entry.score ?? 0;
   const maxScore  = type === 'near_completion' ? NEAR_COMPL_MAX_SCORE : 42;
   const action    = getAction(score, maxScore);
+  const fee       = entry.fee ?? feeProfile(entry.token);
   return {
     address,
     type,
@@ -1344,6 +1423,8 @@ function serializeGraduationEntry(address, entry, type) {
                     ? Math.round((entry.peakHigh / entry.firstOpen) * entry.entryMC)
                     : null,
     lastMultiple: entry.lastMultiple,
+    feeSol:       fee.sol,
+    feeRoute:     fee.route,
     score,
     maxScore,
     reasons:      entry.reasons ?? [],
@@ -1603,7 +1684,7 @@ if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
 
 console.log('🤖 Pump.fun 2x Scanner Bot');
 console.log(`   Interval:        ${CONFIG.scanIntervalMs / 1000}s`);
-console.log(`   Min fee:         ${CONFIG.minTotalFee} SOL`);
+console.log(`   Global fee:      ${GLOBAL_FEE.minSol} SOL (strong ${GLOBAL_FEE.strongSol} SOL)`);
 console.log(`   Min bundler buy: ${CONFIG.minBundlerRate * 100}%`);
 console.log(`   Min bundler hold:${CONFIG.minBundlerHoldRate * 100}%`);
 console.log(`   Min gain:        ${CONFIG.minGainPct}% (1.5x)`);

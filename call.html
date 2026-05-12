@@ -303,7 +303,7 @@ const fmtTime = ts => new Date(ts).toLocaleTimeString([], { hour:'2-digit', minu
 const axiomUrl = address =>
   `https://axiom.trade/t/${address}/@signd?chain=sol`;
 const gmgnUrl = address =>
-  `https://gmgn.ai/sol/token/${address}`;
+  `https://gmgn.ai/sol/token/signd_${address}`;
 
 const TF_LABELS = { very_short:'Very short', short:'Short', mid:'Mid', long:'Long', very_long:'Very long' };
 const TF_CLS    = { very_short:'tf-very-short', short:'tf-short', mid:'tf-mid', long:'tf-long', very_long:'tf-very-long' };

@@ -85,7 +85,7 @@ const ADDRESS = params.get('address') || '';
 const axiomUrl = address =>
   `https://axiom.trade/t/${address}/@signd?chain=sol`;
 const gmgnUrl = address =>
-  `https://gmgn.ai/sol/token/${address}`;
+  `https://gmgn.ai/sol/token/signd_${address}`;
 const AXIOM_LOGO_URL = 'https://docs.axiom.trade/~gitbook/image?url=https%3A%2F%2F539387073-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Forganizations%252FDXTwYvSKQ2pVi0g5GQRm%252Fsites%252Fsite_3vgMr%252Ficon%252F1vUMW6MDD5jb5oUjUbQ6%252Fxxx.png%3Falt%3Dmedia%26token%3Dd2fb4520-b856-4966-a634-befc7059ba7b&width=32&dpr=1&quality=100&sign=a6d0b3f6&sv=2';
 
 if (!ADDRESS) {

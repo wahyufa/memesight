@@ -293,6 +293,7 @@ function persistSignal(entry, type, status = 'watching') {
   if (db.signals.records.length > MAX_RECORDS) db.signals.records = db.signals.records.slice(-MAX_RECORDS);
   db.signals.updatedAt = Date.now();
   saveRecords('signals', SIGNALS_FILE, db.signals);
+  saveActiveEntry(entry, type, status);
 }
 
 function computeStats() {
@@ -570,7 +571,7 @@ function axiomUrl(address) {
 }
 
 function gmgnUrl(address) {
-  return `https://gmgn.ai/sol/token/${address}`;
+  return `https://gmgn.ai/sol/token/signd_${address}`;
 }
 
 function firstNumber(...values) {
@@ -1275,6 +1276,114 @@ const nearComplWatch = new Map();
 const nearComplWins  = [];
 let   nearComplScanN = 0;
 
+function activeRecordId(type, address) {
+  return `${type}:${address}`;
+}
+
+function activeRecordFromEntry(entry, type, status = 'watching') {
+  const token = entry.token || {};
+  const address = token.address;
+  const market = marketSnapshot(entry);
+  return {
+    id: activeRecordId(type, address),
+    type,
+    status,
+    ts: entry.addedAt ?? Date.now(),
+    updatedAt: Date.now(),
+    address,
+    token,
+    fee: entry.fee ?? feeProfile(token),
+    entryMC: entry.entryMC ?? market.baseMC,
+    latestMarketCap: entry.latestMarketCap ?? market.currentMC ?? null,
+    snapshotPeakMC: entry.snapshotPeakMC ?? market.peakMC ?? market.baseMC ?? 0,
+    addedAt: entry.addedAt ?? Date.now(),
+    entryTs: entry.entryTs ?? null,
+    firstOpen: entry.firstOpen ?? null,
+    currentClose: entry.currentClose ?? null,
+    peakClose: entry.peakClose ?? null,
+    peakHigh: entry.peakHigh ?? null,
+    hitAt: entry.hitAt ?? null,
+    lastMultiple: entry.lastMultiple ?? 1,
+    lastAlertedMultiple: entry.lastAlertedMultiple ?? null,
+    score: entry.score ?? null,
+    maxScore: entry.maxScore ?? null,
+    reasons: entry.reasons ?? [],
+  };
+}
+
+function saveActiveEntry(entry, type, status = 'watching') {
+  const address = entry?.token?.address;
+  if (!address) return;
+  void recordStore.saveRecords('active_watch', [activeRecordFromEntry(entry, type, status)]);
+}
+
+function entryFromActiveRecord(record) {
+  const token = record.token || {};
+  if (!token.address && record.address) token.address = record.address;
+  if (!token.address) return null;
+  return {
+    token,
+    fee: record.fee ?? feeProfile(token),
+    entryMC: record.entryMC ?? token.usd_market_cap ?? 0,
+    latestMarketCap: record.latestMarketCap ?? record.currentMC ?? token.usd_market_cap ?? null,
+    snapshotPeakMC: record.snapshotPeakMC ?? record.peakMC ?? record.entryMC ?? token.usd_market_cap ?? 0,
+    addedAt: record.addedAt ?? record.ts ?? Date.now(),
+    entryTs: record.entryTs ?? null,
+    firstOpen: record.firstOpen ?? null,
+    currentClose: record.currentClose ?? null,
+    peakClose: record.peakClose ?? null,
+    peakHigh: record.peakHigh ?? null,
+    hitAt: record.hitAt ?? null,
+    lastMultiple: record.lastMultiple ?? 1,
+    lastAlertedMultiple: record.lastAlertedMultiple ?? null,
+    score: record.score ?? null,
+    maxScore: record.maxScore ?? null,
+    reasons: record.reasons ?? [],
+  };
+}
+
+function activeMaxAgeMs(type) {
+  if (type === 'new_creation') return CONFIG.maxWatchlistAgeMs;
+  if (type === 'completed') return MIGRATION_CONFIG.maxWatchMinutes * 60_000;
+  if (type === 'near_completion') return NEAR_COMPLETION_CONFIG.maxWatchMinutes * 60_000;
+  return 0;
+}
+
+async function hydrateActiveWatch() {
+  const records = await recordStore.loadRecords('active_watch', []);
+  const now = Date.now();
+  let restored = 0;
+
+  for (const record of records) {
+    if (!['watching', 'hit'].includes(record.status)) continue;
+    const maxAge = activeMaxAgeMs(record.type);
+    const addedAt = record.addedAt ?? record.ts ?? 0;
+    if (!maxAge || !addedAt || now - addedAt > maxAge) continue;
+
+    const entry = entryFromActiveRecord(record);
+    if (!entry) continue;
+    const address = entry.token.address;
+
+    if (record.type === 'new_creation') {
+      watchlist.set(address, entry);
+      if (record.status === 'hit' || entry.hitAt) alerted.add(address);
+      restored++;
+    } else if (record.type === 'completed') {
+      migratedWatch.set(address, entry);
+      seenMigrated.add(address);
+      restored++;
+    } else if (record.type === 'near_completion') {
+      nearComplWatch.set(address, entry);
+      seenNearCompl.add(address);
+      restored++;
+    }
+  }
+
+  if (restored) {
+    console.log(`[supabase] restored ${restored} active watch entr${restored === 1 ? 'y' : 'ies'}`);
+  }
+}
+
 // ─── Shared action helper (used by all scanners + dashboard) ──────────────────
 function getAction(score, maxScore) {
   const n = score / maxScore;
@@ -1680,7 +1789,7 @@ const dashServer = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/health') {
-    const supabase = await recordStore.health(['wins', 'misses', 'calls', 'signals']);
+    const supabase = await recordStore.health(['wins', 'misses', 'calls', 'signals', 'active_watch']);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({
       ok: true,
@@ -1889,6 +1998,8 @@ console.log(`   Interval:        ${NEAR_COMPLETION_CONFIG.intervalMs / 1000}s`);
 console.log(`   Watch threshold: score ≥ ${NEAR_COMPLETION_CONFIG.watchThreshold}`);
 console.log(`   Signal:          score ≥ ${NEAR_COMPLETION_CONFIG.signalThreshold}`);
 console.log(`   Strong:          score ≥ ${NEAR_COMPLETION_CONFIG.strongThreshold}`);
+
+await hydrateActiveWatch();
 
 if (TELEGRAM.enabled) setInterval(() => pollCommands().catch(() => {}), 3_000);
 scan().catch(console.error);

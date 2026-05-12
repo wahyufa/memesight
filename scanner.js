@@ -160,13 +160,16 @@ function signalTier(score, maxScore) {
 
 function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice) {
   const mc    = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
-  const curMC = entryPrice > 0 ? (currentPrice / entryPrice) * mc : mc;
+  const peakPrice = entry.peakHigh && entry.peakHigh > 0 ? entry.peakHigh : currentPrice;
+  const peakMC = entryPrice > 0 ? (peakPrice / entryPrice) * mc : mc;
+  const peakGainPct = entryPrice > 0 ? ((peakPrice - entryPrice) / entryPrice) * 100 : gainPct;
+  const peakGainMultiple = entryPrice > 0 ? peakPrice / entryPrice : gainMultiple;
 
   const existing = db.wins.records.find(r => r.address === entry.token.address);
   if (existing) {
-    existing.peakMC       = Math.round(curMC);
-    existing.gainPct      = parseFloat(gainPct.toFixed(2));
-    existing.gainMultiple = parseFloat(gainMultiple);
+    existing.peakMC       = Math.max(existing.peakMC ?? 0, Math.round(peakMC));
+    existing.gainPct      = Math.max(existing.gainPct ?? 0, parseFloat(peakGainPct.toFixed(2)));
+    existing.gainMultiple = Math.max(existing.gainMultiple ?? 0, parseFloat(peakGainMultiple.toFixed(2)));
     existing.updatedAt    = Date.now();
   } else {
     db.wins.records.push({
@@ -180,9 +183,9 @@ function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice
       type,
       signal:       signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
       entryMC:      mc,
-      peakMC:       Math.round(curMC),
-      gainPct:      parseFloat(gainPct.toFixed(2)),
-      gainMultiple: parseFloat(gainMultiple),
+      peakMC:       Math.round(peakMC),
+      gainPct:      parseFloat(peakGainPct.toFixed(2)),
+      gainMultiple: parseFloat(peakGainMultiple.toFixed(2)),
       score:        entry.score ?? null,
       maxScore:     entry.maxScore ?? null,
       durationMs:   Date.now() - entry.addedAt,
@@ -195,15 +198,18 @@ function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice
 }
 
 function persistMiss(entry, type) {
-  const gainPct = entry.firstOpen && entry.currentClose
-    ? ((entry.currentClose - entry.firstOpen) / entry.firstOpen) * 100 : 0;
+  const peakPrice = entry.peakHigh && entry.peakHigh > 0
+    ? entry.peakHigh
+    : (entry.currentClose ?? entry.firstOpen);
+  const gainPct = entry.firstOpen && peakPrice
+    ? ((peakPrice - entry.firstOpen) / entry.firstOpen) * 100 : 0;
   const record = {
     ts:         Date.now(),
     address:    entry.token.address,
     symbol:     entry.token.symbol,
     type,
     signal:     signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
-    entryMC:    entry.token.usd_market_cap ?? 0,
+    entryMC:    entry.entryMC ?? entry.token.usd_market_cap ?? 0,
     peakGainPct: parseFloat(gainPct.toFixed(2)),
     score:      entry.score ?? null,
     maxScore:   entry.maxScore ?? null,
@@ -311,6 +317,20 @@ function fetchKline(address, fromTs) {
     `market kline --chain sol --address ${address}` +
     ` --resolution 1m --from ${fromTs} --to ${now}`
   );
+}
+
+function candleTimeMs(candle) {
+  const t = Number(candle?.time ?? 0);
+  return t > 1_000_000_000_000 ? t : t * 1000;
+}
+
+function candlesSinceEntry(candles, entry) {
+  const entryTs = entry.entryTs ?? entry.addedAt ?? 0;
+  return candles.filter(c => candleTimeMs(c) >= entryTs);
+}
+
+function maxCandleHigh(candles) {
+  return Math.max(0, ...candles.map(c => parseFloat(c.high) || 0));
 }
 
 // ─── Telegram ────────────────────────────────────────────────────────────────
@@ -604,7 +624,7 @@ async function scan() {
       continue;
     }
 
-    watchlist.set(token.address, { token, entryMC: token.usd_market_cap ?? 0, addedAt: now, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null });
+    watchlist.set(token.address, { token, entryMC: token.usd_market_cap ?? 0, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null });
     newAdded++;
     const bsr = (token.sells_24h > 0 ? token.buys_24h / token.sells_24h : token.buys_24h).toFixed(1);
     console.log(
@@ -647,6 +667,7 @@ async function scan() {
       if (!close || close <= 0) continue;
 
       entry.firstOpen = close;
+      entry.entryTs = candleTimeMs(lastCandle);
       console.log(`   📌 $${entry.token.symbol} entry $${close.toExponential(4)}  ATH ratio ${(c0AthPct*100).toFixed(0)}%`);
     }
 
@@ -654,10 +675,12 @@ async function scan() {
     entry.currentClose = currentClose;
     if (!entry.peakClose || currentClose > entry.peakClose) entry.peakClose = currentClose;
     // Track true peak using candle highs (not just close), covering intraday wicks
-    const batchPeakHigh = Math.max(...candles.map(c => parseFloat(c.high) || 0));
+    const batchPeakHigh = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHigh > entry.peakHigh) entry.peakHigh = batchPeakHigh;
     const gainPct      = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (currentClose / entry.firstOpen).toFixed(2);
+    const peakGainPct  = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
+    const peakMultiple = entry.peakHigh ? (entry.peakHigh / entry.firstOpen).toFixed(2) : gainMultiple;
 
     // Estimate current MC based on price ratio vs initial MC
     const estimatedMC = entry.entryMC
@@ -671,23 +694,23 @@ async function scan() {
       continue;
     }
 
-    if (gainPct >= CONFIG.minGainPct) {
+    if (peakGainPct >= CONFIG.minGainPct) {
       if (!entry.hitAt) {
         // First 2x hit — alert and keep monitoring
-        entry.hitAt = { gainPct, gainMultiple, alertedAt: Date.now() };
-        entry.lastAlertedMultiple = parseFloat(gainMultiple);
+        entry.hitAt = { gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now() };
+        entry.lastAlertedMultiple = parseFloat(peakMultiple);
         alerted.add(addr);
-        wins.push({ token: entry.token, gainPct, gainMultiple, alertedAt: Date.now(), entryPrice: entry.firstOpen, currentPrice: currentClose });
-        persistWin(entry, 'new_creation', gainPct, parseFloat(gainMultiple), entry.firstOpen, currentClose);
-        await sendTelegram(buildAlert(entry.token, gainPct, gainMultiple, entry.firstOpen, currentClose));
+        wins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now(), entryPrice: entry.firstOpen, currentPrice: entry.peakHigh });
+        persistWin(entry, 'new_creation', peakGainPct, parseFloat(peakMultiple), entry.firstOpen, entry.peakHigh);
+        await sendTelegram(buildAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 HIT: $${entry.token.symbol} +${gainPct.toFixed(0)}% — still watching`);
       } else {
         // Already alerted — check for next integer milestone (3x, 4x, 5x…)
-        const newMultiple = parseFloat(gainMultiple);
+        const newMultiple = parseFloat(peakMultiple);
         const nextMilestone = Math.floor(entry.lastAlertedMultiple) + 1;
         if (newMultiple >= nextMilestone) {
           entry.lastAlertedMultiple = newMultiple;
-          await sendTelegram(buildMilestoneAlert(entry.token, gainPct, gainMultiple, currentClose, estimatedMC));
+          await sendTelegram(buildMilestoneAlert(entry.token, peakGainPct, peakMultiple, entry.peakHigh, estimatedMC));
           console.log(`   📈 MILESTONE: $${entry.token.symbol} ${gainMultiple}x`);
         }
       }
@@ -934,6 +957,7 @@ async function scanMigrated() {
       token,
       entryMC:      token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
+      entryTs:      null,
       firstOpen:    null,
       peakHigh:     null,
       lastMultiple: 1,
@@ -956,24 +980,27 @@ async function scanMigrated() {
       const close = parseFloat(last.close);
       if (!close || close <= 0) continue;
       entry.firstOpen = close;
+      entry.entryTs = candleTimeMs(last);
     }
 
     const currentClose  = parseFloat(candles[candles.length - 1].close);
     entry.currentClose  = currentClose;
     if (!entry.peakClose || currentClose > entry.peakClose) entry.peakClose = currentClose;
-    const batchPeakHighM = Math.max(...candles.map(c => parseFloat(c.high) || 0));
+    const batchPeakHighM = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHighM > entry.peakHigh) entry.peakHigh = batchPeakHighM;
     const gainPct       = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple  = (currentClose / entry.firstOpen).toFixed(2);
-    const newMultiple   = parseFloat(gainMultiple);
+    const peakGainPct   = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
+    const peakMultiple  = entry.peakHigh ? (entry.peakHigh / entry.firstOpen).toFixed(2) : gainMultiple;
+    const newMultiple   = parseFloat(peakMultiple);
 
-    if (gainPct >= MIGRATION_CONFIG.gainAlertPct) {
+    if (peakGainPct >= MIGRATION_CONFIG.gainAlertPct) {
       const nextMilestone = Math.floor(entry.lastMultiple) + 1;
       if (newMultiple >= nextMilestone) {
         entry.lastMultiple = newMultiple;
-        migratedWins.push({ token: entry.token, gainPct, gainMultiple, alertedAt: Date.now() });
-        if (newMultiple >= 2) persistWin(entry, 'completed', gainPct, newMultiple, entry.firstOpen, currentClose);
-        await sendTelegram(buildMigratedGainAlert(entry.token, gainPct, gainMultiple, entry.firstOpen, currentClose));
+        migratedWins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now() });
+        if (newMultiple >= 2) persistWin(entry, 'completed', peakGainPct, newMultiple, entry.firstOpen, entry.peakHigh);
+        await sendTelegram(buildMigratedGainAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 MIGRATED HIT: $${entry.token.symbol} ${gainMultiple}x`);
       }
     }
@@ -1183,6 +1210,7 @@ async function scanNearCompletion() {
       token,
       entryMC:      token.usd_market_cap ?? 0,
       addedAt:      Date.now(),
+      entryTs:      null,
       firstOpen:    null,
       peakHigh:     null,
       lastMultiple: 1,
@@ -1204,24 +1232,27 @@ async function scanNearCompletion() {
       const close = parseFloat(candles[candles.length - 1].close);
       if (!close || close <= 0) continue;
       entry.firstOpen = close;
+      entry.entryTs = candleTimeMs(candles[candles.length - 1]);
     }
 
     const current      = parseFloat(candles[candles.length - 1].close);
     entry.currentClose = current;
     if (!entry.peakClose || current > entry.peakClose) entry.peakClose = current;
-    const batchPeakHighN = Math.max(...candles.map(c => parseFloat(c.high) || 0));
+    const batchPeakHighN = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHighN > entry.peakHigh) entry.peakHigh = batchPeakHighN;
     const gainPct      = ((current - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (current / entry.firstOpen).toFixed(2);
-    const newMult      = parseFloat(gainMultiple);
+    const peakGainPct  = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
+    const peakMultiple = entry.peakHigh ? (entry.peakHigh / entry.firstOpen).toFixed(2) : gainMultiple;
+    const newMult      = parseFloat(peakMultiple);
 
-    if (gainPct >= NEAR_COMPLETION_CONFIG.gainAlertPct) {
+    if (peakGainPct >= NEAR_COMPLETION_CONFIG.gainAlertPct) {
       const next = Math.floor(entry.lastMultiple) + 1;
       if (newMult >= next) {
         entry.lastMultiple = newMult;
-        nearComplWins.push({ token: entry.token, gainPct, gainMultiple, alertedAt: Date.now(), entryPrice: entry.firstOpen, currentPrice: current });
-        if (newMult >= 2) persistWin(entry, 'near_completion', gainPct, newMult, entry.firstOpen, current);
-        await sendTelegram(buildNearComplGainAlert(entry.token, gainPct, gainMultiple, entry.firstOpen, current));
+        nearComplWins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now(), entryPrice: entry.firstOpen, currentPrice: entry.peakHigh });
+        if (newMult >= 2) persistWin(entry, 'near_completion', peakGainPct, newMult, entry.firstOpen, entry.peakHigh);
+        await sendTelegram(buildNearComplGainAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 NEAR-COMPL HIT: $${entry.token.symbol} ${gainMultiple}x`);
       }
     }

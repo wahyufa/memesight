@@ -114,6 +114,28 @@ function fetchKline(address, sinceTs) {
   return gmgn(`market kline --chain sol --address ${address} --resolution 1m --from ${sinceTs} --to ${now}`);
 }
 
+function candleTimeMs(candle) {
+  const t = Number(candle?.time ?? 0);
+  return t > 1_000_000_000_000 ? t : t * 1000;
+}
+
+function candleCloseAtOrAfter(candles, tsMs) {
+  const sorted = [...candles].sort((a, b) => candleTimeMs(a) - candleTimeMs(b));
+  const candle = sorted.find(c => candleTimeMs(c) >= tsMs) ?? sorted[sorted.length - 1];
+  const close = parseFloat(candle?.close ?? '0');
+  return close > 0 ? close : null;
+}
+
+function maxHighBetween(candles, fromMs, toMs = Infinity) {
+  const highs = candles
+    .filter(c => {
+      const t = candleTimeMs(c);
+      return t >= fromMs && t <= toMs;
+    })
+    .map(c => parseFloat(c.high) || 0);
+  return Math.max(0, ...highs);
+}
+
 // ─── Signal + timeframe helpers ───────────────────────────────────────────────
 function signalFromScore(score, maxScore) {
   if (score >= STRONG_THRESHOLD || score / maxScore >= STRONG_THRESHOLD / 42) return 'STRONG';
@@ -211,8 +233,11 @@ function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, 
 }
 
 // ─── MC update ────────────────────────────────────────────────────────────────
-function updateMC(record, candidateMC) {
+function updateCurrentMC(record, candidateMC) {
   record.currentMC = Math.round(candidateMC);
+}
+
+function updatePeakMC(record, candidateMC) {
   if (candidateMC > record.peakMC) {
     record.peakMC  = Math.round(candidateMC);
     record.peakPct = parseFloat(((record.peakMC - record.mcAtCall) / record.mcAtCall * 100).toFixed(2));
@@ -257,16 +282,15 @@ async function settleStale() {
 
     if (candles.length > 0) {
       if (!call.entryClose) {
-        const first = parseFloat(candles[0]?.close ?? '0');
-        if (first > 0) call.entryClose = first;
+        call.entryClose = candleCloseAtOrAfter(candles, call.ts);
       }
       if (call.entryClose) {
         // Peak within exit window only
         const exitSec       = Math.floor(call.exitWindowEnd / 1000);
         const windowCandles = candles.filter(c => parseInt(c.time) <= exitSec);
         if (windowCandles.length) {
-          const peakHigh = Math.max(...windowCandles.map(c => parseFloat(c.high) || 0));
-          updateMC(call, (peakHigh / call.entryClose) * call.mcAtCall);
+          const peakHigh = maxHighBetween(windowCandles, call.ts, call.exitWindowEnd);
+          if (peakHigh > 0) updatePeakMC(call, (peakHigh / call.entryClose) * call.mcAtCall);
         }
         // Current MC from latest candle
         const lastClose = parseFloat(candles[candles.length - 1].close);
@@ -474,19 +498,19 @@ async function monitorCalls() {
 
     // Set entry price on first successful kline fetch
     if (!call.entryClose) {
-      const first = parseFloat(candles[0]?.close ?? '0');
-      if (first > 0) call.entryClose = first;
+      call.entryClose = candleCloseAtOrAfter(candles, call.ts);
     }
     if (!call.entryClose) continue;
 
     // Current MC + peak MC from price ratio × mcAtCall
     const lastClose  = parseFloat(candles[candles.length - 1].close);
-    const peakHigh   = Math.max(...candles.map(c => parseFloat(c.high) || 0));
+    const peakHigh   = maxHighBetween(candles, call.ts, Math.min(now, call.exitWindowEnd));
+    if (!lastClose || lastClose <= 0) continue;
     const currentMC  = (lastClose / call.entryClose) * call.mcAtCall;
     const peakMCCand = (peakHigh  / call.entryClose) * call.mcAtCall;
 
-    updateMC(call, currentMC);
-    if (peakMCCand > call.peakMC) updateMC(call, peakMCCand);
+    updateCurrentMC(call, currentMC);
+    if (peakHigh > 0 && peakMCCand > call.peakMC) updatePeakMC(call, peakMCCand);
 
     // Record due trajectory snapshots
     for (const snap of call.snapshots) {

@@ -65,7 +65,7 @@ const CONFIG = {
   // Watchlist
   maxWatchlistSize:    10,           // max tokens tracked at once
   maxWatchlistAgeMs:   30 * 60_000,
-  klineDelayMs:        300,
+  klineDelayMs:        Number(process.env.GMGN_KLINE_DELAY_MS || 1_500),
 };
 
 const GLOBAL_FEE = {
@@ -74,6 +74,12 @@ const GLOBAL_FEE = {
   newCreationStrict:    process.env.GLOBAL_FEE_NEW_CREATION_STRICT === 'true',
   migratedStrict:       process.env.GLOBAL_FEE_MIGRATED_STRICT === 'true',
   nearCompletionStrict: process.env.GLOBAL_FEE_NEAR_COMPLETION_STRICT === 'true',
+};
+
+const GMGN_LIMIT = {
+  cooldownUntil: 0,
+  lastLogAt: 0,
+  bufferMs: Number(process.env.GMGN_RATE_LIMIT_BUFFER_MS || 15_000),
 };
 
 // ─── Session state ────────────────────────────────────────────────────────────
@@ -297,12 +303,43 @@ function computeStats() {
 }
 
 // ─── GMGN CLI ────────────────────────────────────────────────────────────────
+function gmgnRateLimitUntil(message) {
+  const remaining = message.match(/~(\d+)s remaining/i);
+  if (remaining) return Date.now() + (Number(remaining[1]) * 1000) + GMGN_LIMIT.bufferMs;
+
+  const reset = message.match(/resets at ([0-9-]+ [0-9:]+ GMT[+-][0-9:]+)/i);
+  if (reset) {
+    const parsed = Date.parse(reset[1].replace(' GMT+00:00', 'Z').replace(' GMT-00:00', 'Z'));
+    if (Number.isFinite(parsed)) return parsed + GMGN_LIMIT.bufferMs;
+  }
+
+  return Date.now() + 5 * 60_000;
+}
+
+function gmgnCooldownActive() {
+  const remainingMs = GMGN_LIMIT.cooldownUntil - Date.now();
+  if (remainingMs <= 0) return false;
+
+  if (Date.now() - GMGN_LIMIT.lastLogAt > 30_000) {
+    console.warn(`[gmgn] rate-limit cooldown active, skipping requests for ${Math.ceil(remainingMs / 1000)}s`);
+    GMGN_LIMIT.lastLogAt = Date.now();
+  }
+  return true;
+}
+
 function gmgn(args) {
+  if (gmgnCooldownActive()) return null;
+
   try {
     const cli = process.platform === 'win32' ? 'node_modules\\.bin\\gmgn-cli' : 'node_modules/.bin/gmgn-cli';
     const out = execSync(`${cli} ${args} --raw`, { encoding: 'utf8', timeout: 30_000 });
     return JSON.parse(out.trim());
-  } catch {
+  } catch (err) {
+    const message = [err?.stdout, err?.stderr, err?.message].filter(Boolean).join('\n');
+    if (/429|RATE_LIMIT/i.test(message)) {
+      GMGN_LIMIT.cooldownUntil = Math.max(GMGN_LIMIT.cooldownUntil, gmgnRateLimitUntil(message));
+      console.warn(`[gmgn] rate limited; pausing GMGN requests until ${new Date(GMGN_LIMIT.cooldownUntil).toISOString()}`);
+    }
     return null;
   }
 }
@@ -812,7 +849,7 @@ const MIGRATION_CONFIG = {
   strongThreshold:   18,       // score ≥ 18 → 🟢 STRONG BUY
 
   // Kline monitoring
-  klineDelayMs:      400,
+  klineDelayMs:      Number(process.env.GMGN_KLINE_DELAY_MS || 1_500),
   gainAlertPct:      50,       // alert at 1.5x
 };
 
@@ -1096,7 +1133,7 @@ const NEAR_COMPLETION_CONFIG = {
   signalThreshold: 10,
   strongThreshold: 18,
 
-  klineDelayMs:    400,
+  klineDelayMs:    Number(process.env.GMGN_KLINE_DELAY_MS || 1_500),
   gainAlertPct:    50,         // alert at 1.5x
 };
 

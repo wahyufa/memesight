@@ -17,9 +17,14 @@ GLOBAL_STRONG_FEE_SOL=10
 GLOBAL_FEE_NEW_CREATION_STRICT=false
 GLOBAL_FEE_MIGRATED_STRICT=false
 GLOBAL_FEE_NEAR_COMPLETION_STRICT=false
+GMGN_KLINE_DELAY_MS=1500
+GMGN_RATE_LIMIT_BUFFER_MS=15000
+CALL_MONITOR_MAX_PER_CYCLE=4
 ```
 
 `GLOBAL_MIN_FEE_SOL` is now the shared fee floor used by both `scanner.js` and `call-scanner.js`. The strict flags only matter when GMGN does not return a fee field for a token; leaving them `false` keeps the scanner from dropping otherwise valid candidates just because fee metadata is missing.
+
+The GMGN variables slow down kline polling and add a cooldown buffer after 429 responses. Keep these conservative on Railway because multiple services can share the same outbound IP quota.
 
 ## Setup
 

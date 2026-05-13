@@ -113,7 +113,6 @@ function saveCall(record) {
 
 const db             = loadCalls();
 db.records           = await recordStore.loadRecords('calls', db.records);
-await recordStore.saveRecords('calls', db.records);
 const isMigratedCall = record => record.type === 'completed';
 const visibleCalls = () => db.records.filter(isMigratedCall);
 const seenAddresses  = new Set(visibleCalls().map(r => r.address));

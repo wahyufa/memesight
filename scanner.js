@@ -173,7 +173,6 @@ if (dedupRecords(db.wins, r => r.gainMultiple ?? 0)) saveRecords('wins', WINS_FI
 if (dedupRecords(db.misses, r => r.peakGainPct ?? 0)) saveRecords('misses', MISSES_FILE, db.misses);
 await recordStore.saveRecords('wins', db.wins.records);
 await recordStore.saveRecords('misses', db.misses.records);
-await recordStore.saveRecords('signals', db.signals.records);
 
 function signalTier(score, maxScore) {
   const n = (score ?? 0) / (maxScore || 10);

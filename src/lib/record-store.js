@@ -23,6 +23,11 @@ function chunks(items, size) {
   return out;
 }
 
+function summarizeBody(body = '') {
+  const compact = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return compact.slice(0, 180);
+}
+
 export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = {}) {
   const { url, key } = supabaseConfig();
   const enabled = Boolean(url && key && globalThis.fetch);
@@ -40,7 +45,35 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
     ? `[supabase] enabled for ${status.urlHost}/${table}`
     : `[supabase] disabled; SUPABASE_URL present=${status.hasUrl}, key present=${status.hasKey}`);
 
+  const cooldown = {
+    until: 0,
+    lastLogAt: 0,
+    ms: Number(process.env.SUPABASE_ERROR_COOLDOWN_MS || 120_000),
+  };
+
+  function cooldownActive() {
+    const remaining = cooldown.until - Date.now();
+    if (remaining <= 0) return false;
+
+    if (Date.now() - cooldown.lastLogAt > 30_000) {
+      logger.warn(`[supabase] cooldown active; using local JSON for ${Math.ceil(remaining / 1000)}s`);
+      cooldown.lastLogAt = Date.now();
+    }
+    return true;
+  }
+
+  function noteTransientFailure(error) {
+    if (!error?.transient) return;
+    cooldown.until = Math.max(cooldown.until, Date.now() + cooldown.ms);
+  }
+
   async function request(path, options = {}) {
+    if (cooldownActive()) {
+      const err = new Error('supabase cooldown active');
+      err.transient = true;
+      throw err;
+    }
+
     const res = await fetch(`${url}/rest/v1/${path}`, {
       ...options,
       headers: {
@@ -53,7 +86,10 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`${res.status} ${res.statusText}${body ? `: ${body.slice(0, 300)}` : ''}`);
+      const err = new Error(`${res.status} ${res.statusText}${body ? `: ${summarizeBody(body)}` : ''}`);
+      err.status = res.status;
+      err.transient = res.status >= 500;
+      throw err;
     }
 
     if (res.status === 204) return null;
@@ -73,6 +109,7 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
       logger.log(`[supabase] loaded ${remoteRecords.length} remote ${scope} record(s), merged ${merged.length}`);
       return merged;
     } catch (error) {
+      noteTransientFailure(error);
       logger.warn(`[supabase] load ${scope} failed; using local JSON fallback: ${error.message}`);
       return fallbackRecords;
     }
@@ -100,6 +137,7 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
       }
       return true;
     } catch (error) {
+      noteTransientFailure(error);
       logger.warn(`[supabase] save ${scope} failed; local JSON is still updated: ${error.message}`);
       return false;
     }
@@ -125,6 +163,7 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
       });
       return true;
     } catch (error) {
+      noteTransientFailure(error);
       logger.warn(`[supabase] save ${scope}/${row.id} failed; local JSON is still updated: ${error.message}`);
       return false;
     }
@@ -143,6 +182,7 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
       }
       return { ...status, ok: true, sampleRows };
     } catch (error) {
+      noteTransientFailure(error);
       return { ...status, ok: false, error: error.message };
     }
   }

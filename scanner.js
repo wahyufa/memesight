@@ -292,7 +292,8 @@ function persistSignal(entry, type, status = 'watching') {
   else db.signals.records.push(record);
   if (db.signals.records.length > MAX_RECORDS) db.signals.records = db.signals.records.slice(-MAX_RECORDS);
   db.signals.updatedAt = Date.now();
-  saveRecords('signals', SIGNALS_FILE, db.signals);
+  saveJSON(SIGNALS_FILE, db.signals);
+  void recordStore.saveRecord('signals', record);
   saveActiveEntry(entry, type, status);
 }
 
@@ -1314,7 +1315,7 @@ function activeRecordFromEntry(entry, type, status = 'watching') {
 function saveActiveEntry(entry, type, status = 'watching') {
   const address = entry?.token?.address;
   if (!address) return;
-  void recordStore.saveRecords('active_watch', [activeRecordFromEntry(entry, type, status)]);
+  void recordStore.saveRecord('active_watch', activeRecordFromEntry(entry, type, status));
 }
 
 function entryFromActiveRecord(record) {

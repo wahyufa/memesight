@@ -417,8 +417,6 @@ tailwind.config = {
             <span class="text-slate-500">Highest market cap reached since the token was added to this session's watchlist.</span>
             <span class="font-semibold text-slate-700">Signal</span>
             <span class="text-slate-500"><strong class="text-emerald-600">STRONG</strong> / <strong class="text-amber-600">MEDIUM</strong> / <strong class="text-slate-400">LOW</strong> — scored from Smart Money count, KOL wallets, rug ratio, and graduation speed.</span>
-            <span class="font-semibold text-slate-700">Est. Profit</span>
-            <span class="text-slate-500">Estimated upside range based on signal tier and token volatility.</span>
             <span class="font-semibold text-slate-700">Smart Money (SM)</span>
             <span class="text-slate-500">Number of known profitable wallets already holding this token. Higher = stronger conviction.</span>
             <span class="font-semibold text-slate-700">KOL</span>
@@ -453,7 +451,7 @@ tailwind.config = {
               </th>
               <th class="px-4 py-3 text-left">Peak MC</th>
               <th class="px-4 py-3 text-left cursor-pointer hover:text-[#0a1b33] dark:hover:text-white transition-colors select-none" id="thSignal">
-                Signal + Est. Profit <span id="sigSort" class="hidden">↓</span>
+                Signal <span id="sigSort" class="hidden">↓</span>
               </th>
               <th class="px-4 py-3 text-left">Links</th>
             </tr>
@@ -711,14 +709,6 @@ const EXIT_REASONS = {
   low:     'Low volatility — patient hold, longer window acceptable',
 };
 
-// ── Profit estimate (min expected if recommendation followed) ──
-const PROFIT_EST = {
-  STRONG: { extreme: '+80–300%', high: '+40–150%', medium: '+15–60%', low:  '+5–25%'   },
-  MEDIUM: { extreme: '+25–100%', high: '+12–50%',  medium: '+5–25%',  low:  '+2–10%'   },
-  LOW:    { extreme: '+5–30%',   high: '+3–15%',   medium: '+1–8%',   low:  'minimal'  },
-};
-const getProfitEst = (signal, vol) => PROFIT_EST[signal]?.[vol] || '—';
-
 // ── Fetch & transform ──
 async function fetchData() {
   try {
@@ -895,8 +885,6 @@ function renderWatchlist(list) {
   body.innerHTML = filtered.map((c, i) => {
     const reasons  = getSignalReasons(c);
     const warnings = getWarnings(c);
-    const est      = getProfitEst(c.buy_signal, c.volatility);
-    const exitNote = EXIT_REASONS[c.volatility] || '';
     const nowDelta = mcDeltaPct(c);
     return `
     <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors">
@@ -955,7 +943,6 @@ function renderWatchlist(list) {
       <td class="px-3 py-2.5" style="min-width:160px">
         <div class="flex items-center gap-2 mb-1">
           ${sigBadge(c.buy_signal)}
-          <span class="text-xs font-semibold ${c.buy_signal === 'STRONG' ? 'text-emerald-400' : c.buy_signal === 'MEDIUM' ? 'text-amber-400' : 'text-slate-400'}">${est}</span>
         </div>
         <div class="space-y-0.5">
           ${reasons.slice(0, 2).map(r => `<div class="text-xs text-slate-400 flex items-start gap-1"><span class="text-slate-500">·</span><span>${r}</span></div>`).join('')}

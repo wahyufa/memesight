@@ -39,7 +39,6 @@ const DATA_DIR              = path.join(__dirname, 'data');
 const CALLS_FILE            = path.join(DATA_DIR, 'calls.json');
 const MAX_CALLS             = 500;
 const MIGRATION_INTERVAL_MS = 90_000;
-const NEW_CREATION_INTERVAL = 60_000;
 const MONITOR_INTERVAL_MS   = 60_000;
 const MONITOR_MAX_PER_CYCLE = Number(process.env.CALL_MONITOR_MAX_PER_CYCLE || 4);
 const KLINE_DELAY_MS        = Number(process.env.GMGN_KLINE_DELAY_MS || 1_500);
@@ -106,12 +105,20 @@ function saveCalls() {
   void recordStore.saveRecords('calls', db.records);
 }
 
+function saveCall(record) {
+  try { fs.writeFileSync(CALLS_FILE, JSON.stringify(db), 'utf8'); }
+  catch (e) { console.error('[save]', e.message); }
+  void recordStore.saveRecord('calls', record);
+}
+
 const db             = loadCalls();
 db.records           = await recordStore.loadRecords('calls', db.records);
 await recordStore.saveRecords('calls', db.records);
-const seenAddresses  = new Set(db.records.map(r => r.address));
+const isMigratedCall = record => record.type === 'completed';
+const visibleCalls = () => db.records.filter(isMigratedCall);
+const seenAddresses  = new Set(visibleCalls().map(r => r.address));
 
-console.log(`[call-scanner] Loaded ${db.records.length} calls (${db.records.filter(r=>r.verdict==='pending').length} pending)`);
+console.log(`[call-scanner] Loaded ${visibleCalls().length} migrated calls (${visibleCalls().filter(r=>r.verdict==='pending').length} pending)`);
 
 // ─── GMGN CLI ─────────────────────────────────────────────────────────────────
 function gmgnRateLimitUntil(message) {
@@ -331,7 +338,7 @@ function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, 
   db.records.push(record);
   if (db.records.length > MAX_CALLS) db.records = db.records.slice(-MAX_CALLS);
   seenAddresses.add(address);
-  saveCalls();
+  saveCall(record);
 
   return record;
 }
@@ -385,7 +392,7 @@ function recoverSnapshots(call, candles) {
 
 // ─── Settle stale pending calls on startup ────────────────────────────────────
 async function settleStale() {
-  const stale = db.records.filter(r => r.verdict === 'pending' && Date.now() > r.exitWindowEnd);
+  const stale = db.records.filter(r => isMigratedCall(r) && r.verdict === 'pending' && Date.now() > r.exitWindowEnd);
   if (!stale.length) { console.log('[startup] No stale pending calls.'); return; }
   console.log(`[startup] Settling ${stale.length} stale pending call(s) from kline history...`);
 
@@ -521,7 +528,10 @@ async function scanMigration() {
     }
   }
 
-  if (snapshots) saveCalls();
+  if (snapshots) {
+    try { fs.writeFileSync(CALLS_FILE, JSON.stringify(db), 'utf8'); }
+    catch (e) { console.error('[save]', e.message); }
+  }
   console.log(`   ${tokens.length} scanned | ${newCalls} new calls | ${snapshots} MC updates`);
 }
 
@@ -606,14 +616,17 @@ async function scanNewCreation() {
     }
   }
 
-  if (snapshots) saveCalls();
+  if (snapshots) {
+    try { fs.writeFileSync(CALLS_FILE, JSON.stringify(db), 'utf8'); }
+    catch (e) { console.error('[save]', e.message); }
+  }
   console.log(`   ${tokens.length} scanned | ${newCalls} new calls | ${snapshots} MC updates`);
 }
 
 // ─── Monitor loop ─────────────────────────────────────────────────────────────
 async function monitorCalls() {
   const pending = db.records
-    .filter(r => r.verdict === 'pending')
+    .filter(r => isMigratedCall(r) && r.verdict === 'pending')
     .sort((a, b) => (a.lastCheckedAt ?? 0) - (b.lastCheckedAt ?? 0));
   if (!pending.length) return;
   const batch = pending.slice(0, MONITOR_MAX_PER_CYCLE);
@@ -623,7 +636,7 @@ async function monitorCalls() {
   let updated   = 0;
   let settled   = 0;
   let snapped   = 0;
-  let needsSave = false;
+  const changed = [];
 
   for (const call of batch) {
     // Migrate: add snapshots for calls created before this feature
@@ -633,7 +646,7 @@ async function monitorCalls() {
     call.sinceTs = klineTimestampMs(call.sinceTs, (call.ts || Date.now()) - 60_000);
     const kline   = fetchKline(call.address, call.sinceTs);
     call.lastCheckedAt = Date.now();
-    needsSave = true;
+    changed.push(call);
     const candles = kline?.list ?? [];
     if (!candles.length) continue;
 
@@ -663,7 +676,6 @@ async function monitorCalls() {
     }
 
     updated++;
-    needsSave = true;
 
     if (now >= call.exitWindowEnd) {
       // Fill any remaining unrecorded snapshots from kline before settling
@@ -673,7 +685,11 @@ async function monitorCalls() {
     }
   }
 
-  if (needsSave) saveCalls();
+  if (changed.length) {
+    try { fs.writeFileSync(CALLS_FILE, JSON.stringify(db), 'utf8'); }
+    catch (e) { console.error('[save]', e.message); }
+    for (const call of changed) void recordStore.saveRecord('calls', call);
+  }
   console.log(`   Updated: ${updated} | Snapshots recorded: ${snapped} | Settled: ${settled}`);
 }
 
@@ -686,14 +702,15 @@ http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
 
   if (url === '/api/calls') {
-    const wins    = db.records.filter(r => r.verdict === 'W').length;
-    const losses  = db.records.filter(r => r.verdict === 'L').length;
-    const pending = db.records.filter(r => r.verdict === 'pending').length;
+    const calls   = visibleCalls();
+    const wins    = calls.filter(r => r.verdict === 'W').length;
+    const losses  = calls.filter(r => r.verdict === 'L').length;
+    const pending = calls.filter(r => r.verdict === 'pending').length;
     const settled = wins + losses;
     res.writeHead(200, { 'Content-Type': 'application/json', ...cors });
     res.end(JSON.stringify({
-      calls: [...db.records].sort((a, b) => b.ts - a.ts),
-      stats: { total: db.records.length, wins, losses, pending, settled, winRate: settled ? +(wins/settled*100).toFixed(1) : 0 },
+      calls: [...calls].sort((a, b) => b.ts - a.ts),
+      stats: { total: calls.length, wins, losses, pending, settled, winRate: settled ? +(wins/settled*100).toFixed(1) : 0 },
       updatedAt: Date.now(),
     }));
     return;
@@ -757,9 +774,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await settleStale();    // fix any calls that expired while scanner was offline
   await monitorCalls();
   await scanMigration();
-  await scanNewCreation();
 
   setInterval(monitorCalls,    MONITOR_INTERVAL_MS);
   setInterval(scanMigration,   MIGRATION_INTERVAL_MS);
-  setInterval(scanNewCreation, NEW_CREATION_INTERVAL);
 })();

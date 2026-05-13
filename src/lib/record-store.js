@@ -105,6 +105,31 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
     }
   }
 
+  async function saveRecord(scope, record) {
+    if (!enabled) return false;
+    if (!record) return true;
+
+    const row = {
+      scope,
+      id: recordId(record),
+      ts: Number(record.ts || record.updatedAt || Date.now()),
+      record,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      await request(`${table}?on_conflict=scope,id`, {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify([row]),
+      });
+      return true;
+    } catch (error) {
+      logger.warn(`[supabase] save ${scope}/${row.id} failed; local JSON is still updated: ${error.message}`);
+      return false;
+    }
+  }
+
   async function health(scopes = []) {
     if (!enabled) return { ...status, ok: false, reason: 'missing_supabase_env' };
 
@@ -122,5 +147,5 @@ export function createRecordStore({ table = DEFAULT_TABLE, logger = console } = 
     }
   }
 
-  return { enabled, table, status, loadRecords, saveRecords, health };
+  return { enabled, table, status, loadRecords, saveRecords, saveRecord, health };
 }

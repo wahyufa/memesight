@@ -259,10 +259,10 @@ tailwind.config = {
             <th class="px-4 py-3 text-left w-32">Est. Profit</th>
             <th class="px-4 py-3 text-left" style="min-width:140px">Timeframe · Exit</th>
             <th class="px-4 py-3 text-left" style="min-width:180px">Reason</th>
-            <th class="px-4 py-3 text-left w-28">Links</th>
             <th class="px-4 py-3 text-left w-28">Current MC</th>
             <th class="px-4 py-3 text-left w-28">Peak MC</th>
             <th class="px-4 py-3 text-left w-28">Verdict</th>
+            <th class="px-4 py-3 text-left w-28">Links</th>
           </tr>
         </thead>
         <tbody id="callBody">
@@ -307,7 +307,8 @@ const axiomUrl = address =>
 const gmgnUrl = address =>
   `https://gmgn.ai/sol/token/signd_${address}`;
 const pumpfunUrl = address =>
-  `https://pump.fun/${address}`;
+  `https://pump.fun/coin/${address}`;
+const AXIOM_LOGO_URL = 'https://docs.axiom.trade/~gitbook/image?url=https%3A%2F%2F539387073-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Forganizations%252FDXTwYvSKQ2pVi0g5GQRm%252Fsites%252Fsite_3vgMr%252Ficon%252F1vUMW6MDD5jb5oUjUbQ6%252Fxxx.png%3Falt%3Dmedia%26token%3Dd2fb4520-b856-4966-a634-befc7059ba7b&width=32&dpr=1&quality=100&sign=a6d0b3f6&sv=2';
 
 const TF_LABELS = { very_short:'Very short', short:'Short', mid:'Mid', long:'Long', very_long:'Very long' };
 const TF_CLS    = { very_short:'tf-very-short', short:'tf-short', mid:'tf-mid', long:'tf-long', very_long:'tf-very-long' };
@@ -394,15 +395,16 @@ function reasonLines(c) {
 
 function tradeLinks(c) {
   const items = [
-    ['AX', 'Axiom', axiomUrl(c.addrFull)],
-    ['GM', 'GMGN', gmgnUrl(c.addrFull)],
-    ['PF', 'Pump.fun', pumpfunUrl(c.addrFull)],
+    ['Axiom', axiomUrl(c.addrFull), AXIOM_LOGO_URL, 'rounded'],
+    ['GMGN', gmgnUrl(c.addrFull), './src/img/gmgn.svg', ''],
+    ['Pump.fun', pumpfunUrl(c.addrFull), './src/img/pumpfun.svg', ''],
   ];
-  return `<div class="flex items-center gap-1.5">
-    ${items.map(([short, label, href]) => `
+  return `<div class="flex items-center justify-end gap-1.5">
+    ${items.map(([label, href, src, extraClass]) => `
       <a href="${href}" target="_blank" rel="noopener noreferrer" title="${label}"
-         class="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-slate-200 bg-white px-2 text-[10px] font-extrabold text-slate-500 shadow-sm transition-colors hover:border-emerald-300 hover:text-emerald-600 dark:border-slate-700 dark:bg-[#151925] dark:text-slate-400 dark:hover:border-emerald-700 dark:hover:text-emerald-400">
-        ${short}
+         aria-label="Open on ${label}"
+         class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition-colors hover:border-emerald-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#151925] dark:hover:border-emerald-700">
+        <img src="${src}" alt="" class="h-4 w-4 object-contain ${extraClass}" loading="lazy"/>
       </a>
     `).join('')}
   </div>`;
@@ -443,10 +445,8 @@ function renderTable(list) {
           <div>
             <div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">$${c.ticker}</div>
             <div class="flex items-center gap-2">
-              <a href="${axiomUrl(c.addrFull)}" target="_blank" rel="noopener noreferrer"
-                 class="text-xs font-mono text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">${c.addrDisplay}</a>
-              <a href="${gmgnUrl(c.addrFull)}" target="_blank" rel="noopener noreferrer"
-                 class="text-[10px] font-bold uppercase text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">GMGN</a>
+              <span class="text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                onclick="navigator.clipboard.writeText('${c.addrFull}')" title="Click to copy">${c.addrDisplay}</span>
             </div>
           </div>
         </div>
@@ -475,8 +475,6 @@ function renderTable(list) {
         <div class="space-y-0.5">${reasonLines(c)}</div>
       </td>
 
-      <td class="px-4 py-3">${tradeLinks(c)}</td>
-
       <td class="px-4 py-3">
         ${currentCell}
       </td>
@@ -486,6 +484,8 @@ function renderTable(list) {
       <td class="px-4 py-3">
         <span class="${vCls} text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">${vLbl}</span>
       </td>
+
+      <td class="px-4 py-3">${tradeLinks(c)}</td>
     </tr>`;
   }).join('');
 }

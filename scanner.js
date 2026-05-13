@@ -64,7 +64,7 @@ const CONFIG = {
 
   // Watchlist
   maxWatchlistSize:    10,           // max tokens tracked at once
-  maxWatchlistAgeMs:   30 * 60_000,
+  maxWatchlistAgeMs:   2 * 60 * 60_000,
   klineDelayMs:        Number(process.env.GMGN_KLINE_DELAY_MS || 1_500),
 };
 
@@ -1233,10 +1233,10 @@ async function scanMigrated() {
 
     if (peakGainPct >= MIGRATION_CONFIG.gainAlertPct) {
       const nextMilestone = Math.floor(entry.lastMultiple) + 1;
-      if (newMultiple >= nextMilestone) {
+      if (entry.lastMultiple <= 1 || newMultiple >= nextMilestone) {
         entry.lastMultiple = newMultiple;
         migratedWins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now() });
-        if (newMultiple >= 2) persistWin(entry, 'completed', peakGainPct, newMultiple, entry.firstOpen, entry.peakHigh);
+        persistWin(entry, 'completed', peakGainPct, newMultiple, entry.firstOpen, entry.peakHigh);
         persistSignal(entry, 'completed', 'hit');
         await sendTelegram(buildMigratedGainAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 MIGRATED HIT: $${entry.token.symbol} ${gainMultiple}x`);
@@ -1610,10 +1610,10 @@ async function scanNearCompletion() {
 
     if (peakGainPct >= NEAR_COMPLETION_CONFIG.gainAlertPct) {
       const next = Math.floor(entry.lastMultiple) + 1;
-      if (newMult >= next) {
+      if (entry.lastMultiple <= 1 || newMult >= next) {
         entry.lastMultiple = newMult;
         nearComplWins.push({ token: entry.token, gainPct: peakGainPct, gainMultiple: peakMultiple, alertedAt: Date.now(), entryPrice: entry.firstOpen, currentPrice: entry.peakHigh });
-        if (newMult >= 2) persistWin(entry, 'near_completion', peakGainPct, newMult, entry.firstOpen, entry.peakHigh);
+        persistWin(entry, 'near_completion', peakGainPct, newMult, entry.firstOpen, entry.peakHigh);
         persistSignal(entry, 'near_completion', 'hit');
         await sendTelegram(buildNearComplGainAlert(entry.token, peakGainPct, peakMultiple, entry.firstOpen, entry.peakHigh));
         console.log(`   🚀 NEAR-COMPL HIT: $${entry.token.symbol} ${gainMultiple}x`);

@@ -9,7 +9,13 @@ import {
 } from '@phosphor-icons/react'
 import { cn } from './lib/utils'
 
-const BASE = (typeof window !== 'undefined' && (window as any).SCANNER_BASE) || 'http://localhost:3000'
+const BASE = (() => {
+  if (typeof window === 'undefined') return ''
+  const configured = (window as any).SCANNER_BASE
+  if (configured) return configured
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'http://localhost:3000'
+  return window.location.origin
+})()
 
 type SignalBadgeType = 'STRONG' | 'MEDIUM' | 'LOW'
 

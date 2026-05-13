@@ -249,7 +249,7 @@ tailwind.config = {
   <!-- Desktop table -->
   <div class="desktop-table call-wrap rounded-2xl border border-slate-200/60 bg-white overflow-hidden shadow-sm" style="box-shadow:0 0 0 1px rgba(16,185,129,.08),0 4px 24px -4px rgba(16,185,129,.06)">
     <div class="overflow-x-auto">
-      <table class="w-full text-sm call-table" style="min-width:980px">
+      <table class="w-full text-sm call-table" style="min-width:1120px">
         <thead>
           <tr class="border-b border-slate-200/70 text-xs uppercase tracking-wider text-slate-500 bg-slate-50/80">
             <th class="px-4 py-3 text-left w-8">#</th>
@@ -259,13 +259,14 @@ tailwind.config = {
             <th class="px-4 py-3 text-left w-32">Est. Profit</th>
             <th class="px-4 py-3 text-left" style="min-width:140px">Timeframe · Exit</th>
             <th class="px-4 py-3 text-left" style="min-width:180px">Reason</th>
+            <th class="px-4 py-3 text-left w-28">Links</th>
             <th class="px-4 py-3 text-left w-28">Current MC</th>
             <th class="px-4 py-3 text-left w-28">Peak MC</th>
             <th class="px-4 py-3 text-left w-28">Verdict</th>
           </tr>
         </thead>
         <tbody id="callBody">
-          <tr><td colspan="10" class="text-center py-16 text-slate-400">Loading…</td></tr>
+          <tr><td colspan="11" class="text-center py-16 text-slate-400">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -291,6 +292,7 @@ const fmtK = v => {
   return '$' + v.toFixed(0);
 };
 const fmtPct = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+const fmtMaybePct = v => v == null || isNaN(v) ? '—' : fmtPct(v);
 const timeAgo = ms => {
   const s = Math.floor(ms/1000);
   if (s < 60)  return s + 's ago';
@@ -304,12 +306,20 @@ const axiomUrl = address =>
   `https://axiom.trade/t/${address}/@signd?chain=sol`;
 const gmgnUrl = address =>
   `https://gmgn.ai/sol/token/signd_${address}`;
+const pumpfunUrl = address =>
+  `https://pump.fun/${address}`;
 
 const TF_LABELS = { very_short:'Very short', short:'Short', mid:'Mid', long:'Long', very_long:'Very long' };
 const TF_CLS    = { very_short:'tf-very-short', short:'tf-short', mid:'tf-mid', long:'tf-long', very_long:'tf-very-long' };
 
 // ─── Normalize API record → render-friendly shape ─────────────────────────────
 function normalize(c) {
+  const hasKline = Number(c.entryClose) > 0;
+  const hasMarketSnapshot = Number(c.marketSnapshotAt) > 0;
+  const hasTrack = hasKline || hasMarketSnapshot;
+  const curPct = hasTrack && c.currentMC != null && c.mcAtCall
+    ? ((c.currentMC - c.mcAtCall) / c.mcAtCall) * 100
+    : null;
   return {
     ...c,
     ticker:      c.symbol,
@@ -320,8 +330,10 @@ function normalize(c) {
     exitLbl:     fmtTime(c.ts) + '–' + fmtTime(c.exitWindowEnd),
     tf:          c.timeframe,
     grad:        c.gradMin ?? null,
-    curPct:      ((c.currentMC - c.mcAtCall) / c.mcAtCall) * 100,
-    peakPct:     c.peakPct ?? 0,
+    hasKline,
+    hasTrack,
+    curPct,
+    peakPct:     hasTrack ? (c.peakPct ?? 0) : null,
   };
 }
 
@@ -380,11 +392,27 @@ function reasonLines(c) {
   ).join('');
 }
 
+function tradeLinks(c) {
+  const items = [
+    ['AX', 'Axiom', axiomUrl(c.addrFull)],
+    ['GM', 'GMGN', gmgnUrl(c.addrFull)],
+    ['PF', 'Pump.fun', pumpfunUrl(c.addrFull)],
+  ];
+  return `<div class="flex items-center gap-1.5">
+    ${items.map(([short, label, href]) => `
+      <a href="${href}" target="_blank" rel="noopener noreferrer" title="${label}"
+         class="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-slate-200 bg-white px-2 text-[10px] font-extrabold text-slate-500 shadow-sm transition-colors hover:border-emerald-300 hover:text-emerald-600 dark:border-slate-700 dark:bg-[#151925] dark:text-slate-400 dark:hover:border-emerald-700 dark:hover:text-emerald-400">
+        ${short}
+      </a>
+    `).join('')}
+  </div>`;
+}
+
 // ─── Render desktop table ───────────────────────────────────────────────────
 function renderTable(list) {
   const body = document.getElementById('callBody');
   if (!list.length) {
-    body.innerHTML = `<tr><td colspan="10" class="text-center py-16 text-slate-400">No calls match the current filters.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="11" class="text-center py-16 text-slate-400">No calls match the current filters.</td></tr>`;
     return;
   }
   body.innerHTML = list.map((c, i) => {
@@ -392,13 +420,17 @@ function renderTable(list) {
     const tfCls      = TF_CLS[c.tf] || 'tf-short';
     const tfLbl      = TF_LABELS[c.tf] || c.tf;
     const vCls       = c.verdict === 'W' ? 'verdict-w' : c.verdict === 'L' ? 'verdict-l' : 'verdict-pending';
-    const vLbl       = c.verdict === 'W' ? `W ${fmtPct(c.peakPct)}` :
-                       c.verdict === 'L' ? `L ${fmtPct(c.peakPct)}` : 'Pending';
-    const curColor   = c.curPct >= 0 ? 'text-emerald-500' : 'text-red-400';
-    const peakCell   = c.verdict === 'pending' && !c.peakMC
+    const vLbl       = c.verdict === 'W' ? `W ${fmtMaybePct(c.peakPct)}` :
+                       c.verdict === 'L' ? `L ${fmtMaybePct(c.peakPct)}` : 'Pending';
+    const curColor   = c.curPct == null ? 'text-slate-400' : c.curPct >= 0 ? 'text-emerald-500' : 'text-red-400';
+    const currentCell = !c.hasTrack
+      ? `<span class="text-xs text-slate-400">waiting for kline…</span>`
+      : `<div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">${fmtK(c.currentMC)}</div>
+         <div class="text-xs ${curColor}">${fmtMaybePct(c.curPct)}</div>`;
+    const peakCell   = !c.hasTrack
       ? `<span class="text-xs text-slate-400">tracking…</span>`
       : `<div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">${fmtK(c.peakMC)}</div>
-         <div class="text-xs text-emerald-500">${fmtPct(c.peakPct)}</div>
+         <div class="text-xs text-emerald-500">${fmtMaybePct(c.peakPct)}</div>
          ${trajectoryDots(c.snapshots)}`;
 
     return `
@@ -443,9 +475,10 @@ function renderTable(list) {
         <div class="space-y-0.5">${reasonLines(c)}</div>
       </td>
 
+      <td class="px-4 py-3">${tradeLinks(c)}</td>
+
       <td class="px-4 py-3">
-        <div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">${fmtK(c.currentMC)}</div>
-        <div class="text-xs ${curColor}">${fmtPct(c.curPct)}</div>
+        ${currentCell}
       </td>
 
       <td class="px-4 py-3">${peakCell}</td>
@@ -469,9 +502,9 @@ function renderCards(list) {
     const tfCls    = TF_CLS[c.tf] || 'tf-short';
     const tfLbl    = TF_LABELS[c.tf] || c.tf;
     const vCls     = c.verdict === 'W' ? 'verdict-w' : c.verdict === 'L' ? 'verdict-l' : 'verdict-pending';
-    const vLbl     = c.verdict === 'W' ? `W ${fmtPct(c.peakPct)}` :
-                     c.verdict === 'L' ? `L ${fmtPct(c.peakPct)}` : 'Pending';
-    const curColor = c.curPct >= 0 ? 'text-emerald-500' : 'text-red-400';
+    const vLbl     = c.verdict === 'W' ? `W ${fmtMaybePct(c.peakPct)}` :
+                     c.verdict === 'L' ? `L ${fmtMaybePct(c.peakPct)}` : 'Pending';
+    const curColor = c.curPct == null ? 'text-slate-400' : c.curPct >= 0 ? 'text-emerald-500' : 'text-red-400';
     return `
     <div class="rounded-2xl border border-slate-200/60 dark:border-[rgba(255,255,255,.07)] bg-white dark:bg-[#1c2032] p-4 shadow-sm fade-in">
       <div class="flex items-center gap-3 mb-3">
@@ -498,14 +531,17 @@ function renderCards(list) {
         </div>
         <div class="bg-slate-50 dark:bg-[#0f1219] rounded-xl p-2.5 text-center">
           <div class="text-slate-400 mb-0.5">Current MC</div>
-          <div class="font-semibold ${curColor}">${fmtK(c.currentMC)}</div>
-          <div class="${curColor}">${fmtPct(c.curPct)}</div>
+          ${c.hasTrack
+            ? `<div class="font-semibold ${curColor}">${fmtK(c.currentMC)}</div>
+               <div class="${curColor}">${fmtMaybePct(c.curPct)}</div>`
+            : `<div class="font-semibold text-slate-400">tracking</div>
+               <div class="text-slate-400">—</div>`}
         </div>
         <div class="bg-slate-50 dark:bg-[#0f1219] rounded-xl p-2.5 text-center">
           <div class="text-slate-400 mb-0.5">Peak MC</div>
-          ${c.peakMC != null
+          ${c.hasTrack
             ? `<div class="font-semibold text-emerald-500">${fmtK(c.peakMC)}</div>
-               <div class="text-emerald-500">${fmtPct(c.peakPct)}</div>`
+               <div class="text-emerald-500">${fmtMaybePct(c.peakPct)}</div>`
             : `<div class="text-slate-400">—</div><div class="text-slate-400"> </div>`}
         </div>
       </div>
@@ -515,6 +551,10 @@ function renderCards(list) {
           <span class="${tfCls} font-semibold px-2 py-0.5 rounded-md">${tfLbl}</span>
           <span class="text-slate-400 font-mono">${c.exitLbl}</span>
         </div>
+        ${tradeLinks(c)}
+      </div>
+
+      <div class="mt-2 text-xs">
         <div class="text-slate-400 text-right">
           ${c.sm ? `SM ${c.sm.count} (${c.sm.quality})` : ''}${c.kol ? ` · KOL ${c.kol.count}` : ''}${c.grad != null ? ` · ${c.grad}min` : ''}
         </div>
@@ -570,7 +610,7 @@ async function fetchCalls() {
     setStatus('offline — is call-scanner running?', false);
     if (!allCalls.length) {
       document.getElementById('callBody').innerHTML =
-        `<tr><td colspan="10" class="text-center py-16 text-slate-400">Cannot reach call-scanner at ${BASE}</td></tr>`;
+        `<tr><td colspan="11" class="text-center py-16 text-slate-400">Cannot reach call-scanner at ${BASE}</td></tr>`;
       document.getElementById('callCards').innerHTML =
         `<div class="text-center py-16 text-slate-400 text-sm">Cannot reach call-scanner at ${BASE}</div>`;
     }

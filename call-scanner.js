@@ -322,6 +322,7 @@ function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, 
     currentMC:     Math.round(mcAtCall),
     peakMC:        Math.round(mcAtCall),
     peakPct:       0,
+    marketSnapshotAt: null,
     verdict:       'pending',
     settledAt:     null,
     snapshots:     buildSnapshots(now),
@@ -345,6 +346,19 @@ function updatePeakMC(record, candidateMC) {
     record.peakMC  = Math.round(candidateMC);
     record.peakPct = parseFloat(((record.peakMC - record.mcAtCall) / record.mcAtCall * 100).toFixed(2));
   }
+}
+
+function updatePendingSnapshot(address, marketCap) {
+  const mc = Number(marketCap);
+  if (!Number.isFinite(mc) || mc <= 0) return false;
+
+  const record = db.records.find(r => r.address === address && r.verdict === 'pending');
+  if (!record) return false;
+
+  updateCurrentMC(record, mc);
+  updatePeakMC(record, mc);
+  record.marketSnapshotAt = Date.now();
+  return true;
 }
 
 // ─── Settle verdict ───────────────────────────────────────────────────────────
@@ -426,10 +440,14 @@ async function scanMigration() {
   const nowSec  = Math.floor(Date.now() / 1000);
   const cutoff  = nowSec - 720 * 60; // ignore tokens migrated >12h ago
   let newCalls  = 0;
+  let snapshots = 0;
 
   for (const token of tokens) {
     const addr = token.address;
-    if (seenAddresses.has(addr)) continue;
+    if (seenAddresses.has(addr)) {
+      if (updatePendingSnapshot(addr, token.usd_market_cap)) snapshots++;
+      continue;
+    }
 
     const migratedAt = token.complete_timestamp ?? token.open_timestamp ?? 0;
     if (migratedAt < cutoff) continue;
@@ -503,7 +521,8 @@ async function scanMigration() {
     }
   }
 
-  console.log(`   ${tokens.length} scanned | ${newCalls} new calls`);
+  if (snapshots) saveCalls();
+  console.log(`   ${tokens.length} scanned | ${newCalls} new calls | ${snapshots} MC updates`);
 }
 
 // ─── New creation scanner ─────────────────────────────────────────────────────
@@ -526,10 +545,14 @@ async function scanNewCreation() {
 
   const tokens = data?.new_creation ?? [];
   let newCalls = 0;
+  let snapshots = 0;
 
   for (const token of tokens) {
     const addr = token.address;
-    if (seenAddresses.has(addr)) continue;
+    if (seenAddresses.has(addr)) {
+      if (updatePendingSnapshot(addr, token.usd_market_cap)) snapshots++;
+      continue;
+    }
 
     const bundlerHold = token.bundler_mhr   ?? 0;
     const buys        = token.buys_24h      ?? 0;
@@ -583,7 +606,8 @@ async function scanNewCreation() {
     }
   }
 
-  console.log(`   ${tokens.length} scanned | ${newCalls} new calls`);
+  if (snapshots) saveCalls();
+  console.log(`   ${tokens.length} scanned | ${newCalls} new calls | ${snapshots} MC updates`);
 }
 
 // ─── Monitor loop ─────────────────────────────────────────────────────────────

@@ -183,7 +183,7 @@ function signalTier(score, maxScore) {
 
 function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice) {
   const mc    = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
-  const peakPrice = entry.peakHigh && entry.peakHigh > 0 ? entry.peakHigh : currentPrice;
+  const peakPrice = Math.max(entry.peakHigh || 0, currentPrice || 0);
   const peakMC = entryPrice > 0 ? (peakPrice / entryPrice) * mc : mc;
   const peakGainPct = entryPrice > 0 ? ((peakPrice - entryPrice) / entryPrice) * 100 : gainPct;
   const peakGainMultiple = entryPrice > 0 ? peakPrice / entryPrice : gainMultiple;
@@ -474,6 +474,26 @@ function marketSnapshot(entry) {
     : null;
 
   return { baseMC, currentMC, peakMC, gainPct };
+}
+
+function persistSnapshotWin(entry, type, thresholdPct) {
+  if (entry.hitAt) return false;
+  const market = marketSnapshot(entry);
+  if (!market.baseMC || !market.peakMC) return false;
+
+  const gainPct = ((market.peakMC - market.baseMC) / market.baseMC) * 100;
+  if (gainPct < thresholdPct) return false;
+
+  const multiple = market.peakMC / market.baseMC;
+  const entryPrice = entry.firstOpen || 1;
+  const peakPrice = entryPrice * multiple;
+  entry.hitAt = { gainPct, gainMultiple: multiple.toFixed(2), alertedAt: Date.now(), source: 'peak_mc' };
+  entry.lastAlertedMultiple = multiple;
+  entry.lastMultiple = Math.max(entry.lastMultiple ?? 1, multiple);
+  persistWin(entry, type, gainPct, multiple, entryPrice, peakPrice);
+  persistSignal(entry, type, 'hit');
+  console.log(`   🚀 SNAPSHOT HIT: $${entry.token.symbol} +${gainPct.toFixed(1)}% peak MC`);
+  return true;
 }
 
 // ─── Telegram ────────────────────────────────────────────────────────────────
@@ -821,6 +841,7 @@ async function scan() {
       const entry = watchlist.get(token.address);
       updateEntrySnapshot(entry, token);
       persistSignal(entry, 'new_creation', entry.hitAt ? 'hit' : 'watching');
+      persistSnapshotWin(entry, 'new_creation', CONFIG.minGainPct);
       continue;
     }
     if (alerted.has(token.address)) continue;
@@ -895,6 +916,7 @@ async function scan() {
     const batchPeakHigh = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHigh > entry.peakHigh) entry.peakHigh = batchPeakHigh;
     persistSignal(entry, 'new_creation', entry.hitAt ? 'hit' : 'watching');
+    persistSnapshotWin(entry, 'new_creation', CONFIG.minGainPct);
     const gainPct      = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (currentClose / entry.firstOpen).toFixed(2);
     const peakGainPct  = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
@@ -1151,6 +1173,7 @@ async function scanMigrated() {
       const entry = migratedWatch.get(addr);
       updateEntrySnapshot(entry, token);
       persistSignal(entry, 'completed', entry.lastMultiple > 1 ? 'hit' : 'watching');
+      persistSnapshotWin(entry, 'completed', MIGRATION_CONFIG.gainAlertPct);
       continue;
     }
 
@@ -1225,6 +1248,7 @@ async function scanMigrated() {
     const batchPeakHighM = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHighM > entry.peakHigh) entry.peakHigh = batchPeakHighM;
     persistSignal(entry, 'completed', entry.lastMultiple > 1 ? 'hit' : 'watching');
+    persistSnapshotWin(entry, 'completed', MIGRATION_CONFIG.gainAlertPct);
     const gainPct       = ((currentClose - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple  = (currentClose / entry.firstOpen).toFixed(2);
     const peakGainPct   = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;
@@ -1541,6 +1565,7 @@ async function scanNearCompletion() {
       const entry = nearComplWatch.get(addr);
       updateEntrySnapshot(entry, token);
       persistSignal(entry, 'near_completion', entry.lastMultiple > 1 ? 'hit' : 'watching');
+      persistSnapshotWin(entry, 'near_completion', NEAR_COMPLETION_CONFIG.gainAlertPct);
       continue;
     }
 
@@ -1602,6 +1627,7 @@ async function scanNearCompletion() {
     const batchPeakHighN = maxCandleHigh(candlesSinceEntry(candles, entry));
     if (!entry.peakHigh || batchPeakHighN > entry.peakHigh) entry.peakHigh = batchPeakHighN;
     persistSignal(entry, 'near_completion', entry.lastMultiple > 1 ? 'hit' : 'watching');
+    persistSnapshotWin(entry, 'near_completion', NEAR_COMPLETION_CONFIG.gainAlertPct);
     const gainPct      = ((current - entry.firstOpen) / entry.firstOpen) * 100;
     const gainMultiple = (current / entry.firstOpen).toFixed(2);
     const peakGainPct  = entry.peakHigh ? ((entry.peakHigh - entry.firstOpen) / entry.firstOpen) * 100 : gainPct;

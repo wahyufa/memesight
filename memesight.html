@@ -248,6 +248,11 @@ tailwind.config = {
         class="w-9 h-9 rounded-full flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
         <i class="ph ph-moon" style="font-size:15px" id="darkIcon"></i>
       </button>
+      <a href="https://x.com/Signdsol" target="_blank" rel="noopener noreferrer"
+        title="Signd on X"
+        class="w-9 h-9 rounded-full hidden sm:flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
+        <i class="ph ph-x-logo" style="font-size:15px"></i>
+      </a>
       <a href="/" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0a152d] dark:bg-white text-white dark:text-[#0a1b33] text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm">
         Home
       </a>
@@ -935,7 +940,7 @@ function renderWatchlist(list) {
       <!-- MC Now -->
       <td class="px-3 py-2.5">
         <div class="font-semibold text-[#0a1b33] text-sm">${fmtUSD(c.market_cap)}</div>
-        ${nowDelta != null ? `<div class="text-xs ${deltaClass(nowDelta)}">${fmtDelta(nowDelta)} vs start</div>` : ''}
+        ${nowDelta != null ? `<div class="text-xs ${deltaClass(nowDelta)}">${fmtDelta(nowDelta)}</div>` : ''}
       </td>
 
       <!-- Peak MC -->

@@ -11,6 +11,8 @@
     { "src": "/signd",             "dest": "/memesight.html"    },
     { "src": "/call",              "dest": "/call.html"         },
     { "src": "/token",             "dest": "/token.html"        },
+    { "src": "/docs",              "dest": "/index.html"        },
+    { "src": "/brand-kit",         "dest": "/index.html"        },
     { "src": "/scanner-config.js", "dest": "/scanner-config.js" },
     { "src": "/(.*)",              "dest": "/index.html"        }
   ]

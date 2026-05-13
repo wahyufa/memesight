@@ -5,6 +5,7 @@ import { motion } from 'motion/react'
 import {
   CaretRight, Moon, Sun, Lightning, ShieldCheck, Clock,
   Trophy, ArrowsDownUp, ArrowSquareOut, TrendUp, Eye, Crosshair,
+  XLogo,
 } from '@phosphor-icons/react'
 import { cn } from './lib/utils'
 
@@ -79,6 +80,14 @@ function Hero() {
         </div>
 
         <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">Free to use. No email. No signup.</p>
+        <a
+          href="https://x.com/Signdsol"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#0a1b33] dark:text-slate-400 dark:hover:text-white transition-colors"
+        >
+          <XLogo size={13} weight="bold" /> @Signdsol
+        </a>
 
         <div className="flex items-center gap-2 mt-5">
           <SignalBadge type="STRONG" />
@@ -621,8 +630,20 @@ function Footer() {
             <em>Algorithmic signals for informational purposes only. Not financial advice. Always do your own research.</em>
           </p>
         </div>
-        <div className="border-t border-slate-200/40 dark:border-zinc-800/40 pt-5 text-xs text-center text-slate-400 dark:text-zinc-600">
-          © 2025 Signd
+        <div className="border-t border-slate-200/40 dark:border-zinc-800/40 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 dark:text-zinc-600">
+          <span>© 2026 Signd</span>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <a href="/docs" className="hover:text-[#0a1b33] dark:hover:text-white transition-colors">Docs</a>
+            <a href="/brand-kit" className="hover:text-[#0a1b33] dark:hover:text-white transition-colors">Brand Kit</a>
+            <a
+              href="https://x.com/Signdsol"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-[#0a1b33] dark:hover:text-white transition-colors"
+            >
+              <XLogo size={13} weight="bold" /> @Signdsol
+            </a>
+          </div>
         </div>
       </div>
     </footer>
@@ -630,25 +651,248 @@ function Footer() {
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
+const docsNav = ['Read the table', 'Market cap logic', 'Persistence', 'Links']
+const docsSections = [
+  {
+    id: 'read-the-table',
+    kicker: '01',
+    title: 'Read the table',
+    body: 'The dashboard is a live scanner surface. Start from signal tier, then confirm token age, global fee, smart money/KOL reasons, and market cap movement before opening a trade link.',
+    rows: [
+      ['Signal', 'STRONG, MEDIUM, or LOW based on the scanner score and supporting reasons.'],
+      ['Token Age', 'Age from token creation, useful for separating fresh calls from older migrated tokens.'],
+      ['Called', 'When Signd added the token to the active watch session.'],
+      ['Signal + Est. Profit', 'The conviction tier plus rough expectation band. This is not a guarantee.'],
+    ],
+  },
+  {
+    id: 'market-cap-logic',
+    kicker: '02',
+    title: 'Market cap logic',
+    body: 'Market cap fields are intentionally separated so deploys, slow kline responses, and GMGN snapshots do not blur entry, current, and peak values.',
+    rows: [
+      ['Start MC', 'Locked at the moment the token enters the watchlist. It should not move after entry.'],
+      ['MC Now', 'Latest market cap from kline-derived price movement or the newest GMGN snapshot. The percentage underneath compares against Start MC.'],
+      ['Peak MC', 'Highest observed market cap while watched. Uses kline highs when available, otherwise the highest GMGN snapshot seen by the scanner.'],
+      ['Blank Peak', 'No higher market cap has been observed yet. The app does not copy Start MC into Peak MC.'],
+    ],
+  },
+  {
+    id: 'persistence',
+    kicker: '03',
+    title: 'Persistence',
+    body: 'Supabase stores both history and active scanner state. On deploy, Signd restores active watch entries before the first scan so calls do not restart from an empty memory session.',
+    rows: [
+      ['active_watch', 'Live watch session restore data for new creation, completed, and near-completion scanners.'],
+      ['signals', 'Latest scanner records shown by the dashboard and landing fallback marquee.'],
+      ['wins / misses', 'Settled historical performance used for proof, win rate, and export data.'],
+      ['calls', 'Call List records and verdict tracking.'],
+    ],
+  },
+  {
+    id: 'links',
+    kicker: '04',
+    title: 'Trading links',
+    body: 'Axiom is the primary action link. GMGN remains available with Signd referral formatting. Pump.fun stays available for token launch pages.',
+    rows: [
+      ['Axiom', 'https://axiom.trade/t/<contract>/@signd?chain=sol'],
+      ['GMGN', 'https://gmgn.ai/sol/token/signd_<contract>'],
+      ['Pump.fun', 'https://pump.fun/<contract>'],
+      ['Official X', 'https://x.com/Signdsol'],
+    ],
+  },
+]
+
+const brandColors = [
+  { name: 'Signal Green', hex: '#009B72', use: 'Logo, primary accents, live states' },
+  { name: 'Ink Navy', hex: '#0A1B33', use: 'Primary text, dark buttons' },
+  { name: 'Canvas', hex: '#F9FAFB', use: 'Page background' },
+  { name: 'Mist Border', hex: '#E2E8F0', use: 'Dividers, table borders' },
+  { name: 'Medium Amber', hex: '#F59E0B', use: 'Medium confidence signals' },
+  { name: 'Risk Red', hex: '#EF4444', use: 'Negative deltas and risk states' },
+]
+
+function PageHeader({ label, title, copy }: { label: string; title: string; copy: string }) {
+  return (
+    <section className="py-12 md:py-16">
+      <div className="max-w-3xl">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
+          {label}
+        </div>
+        <h1 className="font-display text-4xl md:text-5xl font-semibold tracking-tight text-[#0a1b33] dark:text-white mb-5">{title}</h1>
+        <p className="text-base leading-relaxed text-slate-500 dark:text-slate-400">{copy}</p>
+      </div>
+    </section>
+  )
+}
+
+function DocsPage() {
+  return (
+    <main className="max-w-[1180px] mx-auto px-4 sm:px-6 pb-20">
+      <PageHeader
+        label="Docs"
+        title="Operate the scanner without guessing"
+        copy="A product reference for reading Signd's live table, understanding market cap tracking, and knowing which data survives deploys."
+      />
+      <div className="grid lg:grid-cols-[220px_1fr] gap-8">
+        <aside className="hidden lg:block">
+          <div className="sticky top-24 border-l border-slate-200 dark:border-zinc-800 pl-4 text-sm">
+            {docsNav.map((item, i) => (
+              <a key={item} href={`#${docsSections[i].id}`} className="block py-2 text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors">
+                {item}
+              </a>
+            ))}
+          </div>
+        </aside>
+        <div className="space-y-5">
+          {docsSections.map(section => (
+            <section id={section.id} key={section.title} className="rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/70 dark:border-zinc-800 p-6 md:p-8 shadow-sm scroll-mt-24">
+              <div className="flex items-start gap-4 mb-6">
+                <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 pt-1">{section.kicker}</span>
+                <div>
+                  <h2 className="font-display text-2xl font-semibold text-[#0a1b33] dark:text-white mb-2">{section.title}</h2>
+                  <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400 max-w-2xl">{section.body}</p>
+                </div>
+              </div>
+              <div className="divide-y divide-slate-200/70 dark:divide-zinc-800 border-y border-slate-200/70 dark:border-zinc-800">
+                {section.rows.map(([term, desc]) => (
+                  <div key={term} className="grid md:grid-cols-[180px_1fr] gap-2 py-4 text-sm">
+                    <div className="font-semibold text-[#0a1b33] dark:text-white">{term}</div>
+                    <div className="text-slate-500 dark:text-slate-400 leading-relaxed">{desc}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function BrandKitPage() {
+  return (
+    <main className="max-w-[1180px] mx-auto px-4 sm:px-6 pb-20">
+      <PageHeader
+        label="Brand Kit"
+        title="A restrained signal brand"
+        copy="Signd should feel precise, fast, and calm. The brand system favors quiet confidence over trading hype."
+      />
+      <section className="rounded-lg overflow-hidden border border-slate-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm mb-6">
+        <div className="grid lg:grid-cols-[1.2fr_.8fr]">
+          <div className="min-h-[280px] bg-[#f9fafb] dark:bg-zinc-950 flex items-center justify-center p-10 border-b lg:border-b-0 lg:border-r border-slate-200/70 dark:border-zinc-800">
+            <img src={logoGreen} alt="Signd logo" className="h-14 w-auto dark:hidden" />
+            <img src={logoBlack} alt="Signd logo" className="h-14 w-auto hidden dark:block" />
+          </div>
+          <div className="p-6 md:p-8 flex flex-col justify-between gap-8">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Primary Lockup</div>
+              <h2 className="font-display text-2xl font-semibold text-[#0a1b33] dark:text-white mb-3">Use the full Signd wordmark wherever space allows.</h2>
+              <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">Keep the logo on quiet backgrounds. Avoid placing it over busy screenshots, noisy charts, or high-contrast gradients.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="rounded-lg border border-slate-200/70 dark:border-zinc-800 p-3">
+                <div className="font-semibold text-[#0a1b33] dark:text-white">Clear Space</div>
+                <div className="text-slate-500 dark:text-slate-400 mt-1">At least icon width around the mark.</div>
+              </div>
+              <div className="rounded-lg border border-slate-200/70 dark:border-zinc-800 p-3">
+                <div className="font-semibold text-[#0a1b33] dark:text-white">Minimum Size</div>
+                <div className="text-slate-500 dark:text-slate-400 mt-1">24px height for digital UI.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section className="grid lg:grid-cols-[.95fr_1.05fr] gap-6 mb-6">
+        <div className="rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/70 dark:border-zinc-800 p-6 shadow-sm">
+          <h2 className="font-display text-xl font-semibold text-[#0a1b33] dark:text-white mb-5">Color System</h2>
+          <div className="space-y-3">
+            {brandColors.map(color => (
+              <div key={color.hex} className="grid grid-cols-[56px_1fr_auto] items-center gap-4 rounded-lg border border-slate-200/70 dark:border-zinc-800 p-3">
+                <div className="h-10 rounded-md border border-black/5" style={{ background: color.hex }} />
+                <div>
+                  <div className="font-semibold text-sm text-[#0a1b33] dark:text-white">{color.name}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{color.use}</div>
+                </div>
+                <div className="font-mono text-xs text-slate-400">{color.hex}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/70 dark:border-zinc-800 p-6 shadow-sm">
+          <h2 className="font-display text-xl font-semibold text-[#0a1b33] dark:text-white mb-5">Usage Rules</h2>
+          <div className="grid sm:grid-cols-2 gap-3 text-sm">
+            {[
+              ['Do', 'Use precise language: signal, watchlist, peak, entry, persistence.'],
+              ['Do', 'Show risk notes plainly. Signd is a scanner, not financial advice.'],
+              ['Avoid', 'Do not use moon language, guaranteed profit claims, or noisy hype styling.'],
+              ['Avoid', 'Do not stretch, recolor, outline, or put effects behind the wordmark.'],
+            ].map(([label, copy]) => (
+              <div key={label + copy} className="rounded-lg border border-slate-200/70 dark:border-zinc-800 p-4">
+                <div className={cn('text-xs font-bold uppercase tracking-wider mb-2', label === 'Do' ? 'text-emerald-600' : 'text-red-400')}>{label}</div>
+                <div className="text-slate-600 dark:text-slate-400 leading-relaxed">{copy}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section className="rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/70 dark:border-zinc-800 p-6 shadow-sm mb-6">
+        <h2 className="font-display text-xl font-semibold text-[#0a1b33] dark:text-white mb-5">Public References</h2>
+        <div className="grid lg:grid-cols-3 gap-3 text-sm">
+          <a href="https://x.com/Signdsol" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-slate-200/70 dark:border-zinc-800 p-4 text-slate-600 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Social</div>
+            <div className="font-semibold">@Signdsol</div>
+          </a>
+          <div className="rounded-lg border border-slate-200/70 dark:border-zinc-800 p-4 text-slate-600 dark:text-slate-400">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">GMGN</div>
+            <div className="font-mono text-xs break-all">https://gmgn.ai/sol/token/signd_&lt;contract&gt;</div>
+          </div>
+          <div className="rounded-lg border border-slate-200/70 dark:border-zinc-800 p-4 text-slate-600 dark:text-slate-400">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Axiom</div>
+            <div className="font-mono text-xs break-all">https://axiom.trade/t/&lt;contract&gt;/@signd?chain=sol</div>
+          </div>
+        </div>
+      </section>
+      <section className="rounded-lg bg-[#0a1b33] text-white p-6 md:p-8 shadow-sm">
+        <div className="grid md:grid-cols-[.8fr_1.2fr] gap-6 items-start">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-300 mb-3">Voice</div>
+            <h2 className="font-display text-2xl font-semibold mb-3">Calm, direct, data-first.</h2>
+            <p className="text-sm leading-relaxed text-slate-300">Signd sounds like a sharp scanner operator: terse when speed matters, specific when explaining data, and honest about uncertainty.</p>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3 text-sm">
+            {['Quiet confidence, not hype.', 'Specific data before broad claims.', 'Clear risk language: not financial advice, always DYOR.'].map(line => (
+              <div key={line} className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-slate-200">{line}</div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
+  )
+}
+
 export default function App() {
   const [dark, setDark] = useState(false)
+  const path = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/'
 
   return (
     <div className={cn(dark && 'dark')}>
       <div className="min-h-screen bg-[#f9fafb] dark:bg-zinc-950 transition-colors duration-300">
         <TopNav dark={dark} toggleDark={() => setDark(d => !d)} />
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
-          <div className="pt-8">
-            <Hero />
-            <PerformersMarquee />
-            <HowItWorks />
-            <WhySection />
-            <Features />
-            <ProofSection />
-            <Roadmap />
-            <CTABanner />
+        {path === '/docs' ? <DocsPage /> : path === '/brand-kit' ? <BrandKitPage /> : (
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+            <div className="pt-8">
+              <Hero />
+              <PerformersMarquee />
+              <HowItWorks />
+              <WhySection />
+              <Features />
+              <ProofSection />
+              <Roadmap />
+              <CTABanner />
+            </div>
           </div>
-        </div>
+        )}
         <Footer />
       </div>
     </div>

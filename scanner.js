@@ -2330,7 +2330,7 @@ const dashServer = http.createServer(async (req, res) => {
     return;
   }
 
-  if (['/','index.html','/dashboard','/dashboard.html','/signd','/signd.html','/memesight','/memesight.html','/call','/call.html','/token','/token.html','/docs','/brand-kit','/scanner-config.js'].some(p => url === p || url === '/'+p)) {
+  if (['/','index.html','/dashboard','/dashboard.html','/signd','/signd.html','/memesight','/memesight.html','/call','/call.html','/token','/token.html','/candidates','/candidates.html','/docs','/brand-kit','/scanner-config.js'].some(p => url === p || url === '/'+p)) {
     const map = {
       '/':                  path.join('dist', 'index.html'),
       '/index.html':        path.join('dist', 'index.html'),
@@ -2344,6 +2344,8 @@ const dashServer = http.createServer(async (req, res) => {
       '/call.html':         'call.html',
       '/token':             'token.html',
       '/token.html':        'token.html',
+      '/candidates':        'candidates.html',
+      '/candidates.html':   'candidates.html',
       '/docs':              path.join('dist', 'index.html'),
       '/brand-kit':         path.join('dist', 'index.html'),
       '/scanner-config.js': 'scanner-config.js',

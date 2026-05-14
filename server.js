@@ -50,6 +50,7 @@ app.get('/memesight', (req, res) => res.sendFile(join(dist, 'memesight.html')));
 app.get('/signd', (req, res) => res.sendFile(join(dist, 'memesight.html')));
 app.get('/call', (req, res) => res.sendFile(join(dist, 'call.html')));
 app.get('/token', (req, res) => res.sendFile(join(dist, 'token.html')));
+app.get('/candidates', (req, res) => res.sendFile(join(dist, 'candidates.html')));
 app.get('/docs', (req, res) => res.sendFile(join(dist, 'index.html')));
 app.get('/brand-kit', (req, res) => res.sendFile(join(dist, 'index.html')));
 app.get('/scanner-config.js', (req, res) => res.sendFile(join(dist, 'scanner-config.js')));

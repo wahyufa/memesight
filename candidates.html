@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Signd Candidates</title>
+<link rel="icon" type="image/png" href="./src/img/favicon.png"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/scanner-config.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-200">
+<header class="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/95 px-4 py-3">
+  <div class="flex flex-wrap items-center gap-3">
+    <a href="/memesight" class="text-sm font-semibold text-emerald-400">Signd</a>
+    <h1 class="text-base font-bold">Candidate Review</h1>
+    <span id="meta" class="text-xs text-slate-500">loading...</span>
+    <div class="ml-auto flex items-center gap-2">
+      <select id="typeFilter" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs">
+        <option value="all">all types</option>
+        <option value="new_creation">new_creation</option>
+        <option value="completed">completed</option>
+        <option value="near_completion">near_completion</option>
+      </select>
+      <select id="decisionFilter" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs">
+        <option value="all">all decisions</option>
+        <option value="watch">watch</option>
+        <option value="skip">skip</option>
+      </select>
+      <button id="refreshBtn" class="rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white">Refresh</button>
+    </div>
+  </div>
+</header>
+
+<main class="p-4">
+  <div class="mb-3 grid gap-2 text-xs text-slate-400 sm:grid-cols-4">
+    <div class="rounded border border-slate-800 bg-slate-900 p-3">Total <div id="statTotal" class="text-lg font-bold text-white">-</div></div>
+    <div class="rounded border border-slate-800 bg-slate-900 p-3">Accepted <div id="statAccepted" class="text-lg font-bold text-emerald-400">-</div></div>
+    <div class="rounded border border-slate-800 bg-slate-900 p-3">Skipped <div id="statSkipped" class="text-lg font-bold text-amber-400">-</div></div>
+    <div class="rounded border border-slate-800 bg-slate-900 p-3">Gate <div id="statGate" class="text-lg font-bold text-white">off</div></div>
+  </div>
+
+  <div class="overflow-x-auto rounded border border-slate-800">
+    <table class="min-w-full text-left text-xs">
+      <thead class="bg-slate-900 text-slate-400">
+        <tr>
+          <th class="px-3 py-2">Time</th>
+          <th class="px-3 py-2">Token</th>
+          <th class="px-3 py-2">Type</th>
+          <th class="px-3 py-2">Decision</th>
+          <th class="px-3 py-2">Prob</th>
+          <th class="px-3 py-2">MC</th>
+          <th class="px-3 py-2">Score</th>
+          <th class="px-3 py-2">Reason</th>
+          <th class="px-3 py-2">Key Features</th>
+          <th class="px-3 py-2">Links</th>
+        </tr>
+      </thead>
+      <tbody id="rows" class="divide-y divide-slate-800 bg-slate-950"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const BASE = (typeof window !== 'undefined' && window.SCANNER_BASE) || location.origin;
+let candidates = [];
+
+const fmtUSD = n => {
+  const v = Number(n || 0);
+  if (!v) return '-';
+  if (v >= 1_000_000) return '$' + (v / 1_000_000).toFixed(2) + 'M';
+  if (v >= 1_000) return '$' + (v / 1_000).toFixed(1) + 'K';
+  return '$' + v.toFixed(0);
+};
+const timeAgo = ts => {
+  if (!ts) return '-';
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  return h + 'h';
+};
+const pct = v => v == null ? '-' : Math.round(Number(v) * 100) + '%';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const shortAddr = a => a ? a.slice(0, 6) + '...' + a.slice(-4) : '-';
+
+function render() {
+  const type = document.getElementById('typeFilter').value;
+  const decision = document.getElementById('decisionFilter').value;
+  const list = candidates.filter(c =>
+    (type === 'all' || c.type === type) &&
+    (decision === 'all' || c.decision === decision)
+  );
+
+  document.getElementById('meta').textContent = `${list.length} shown`;
+  const body = document.getElementById('rows');
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="10" class="px-3 py-8 text-center text-slate-500">No candidates yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = list.map(c => {
+    const f = c.features || {};
+    const prob = c.probability == null ? '-' : Math.round(c.probability * 100) + '%';
+    const decisionClass = c.decision === 'watch' ? 'text-emerald-400' : 'text-amber-400';
+    const featureText = [
+      `SM ${f.smartMoney ?? 0}`,
+      `KOL ${f.kol ?? 0}`,
+      `liq/mc ${pct(f.liquidityToMC)}`,
+      `B/S ${Number(f.buySellRatio || 0).toFixed(1)}x`,
+      `fee ${f.feeSol ?? '-'}`
+    ].join(' | ');
+    return `
+      <tr class="hover:bg-slate-900/70">
+        <td class="whitespace-nowrap px-3 py-2 text-slate-500">${timeAgo(c.updatedAt || c.ts)}</td>
+        <td class="px-3 py-2">
+          <div class="font-semibold text-white">$${esc(c.symbol || '?')}</div>
+          <div class="font-mono text-[11px] text-slate-500">${shortAddr(c.address)}</div>
+        </td>
+        <td class="whitespace-nowrap px-3 py-2 text-slate-400">${esc(c.type)}</td>
+        <td class="whitespace-nowrap px-3 py-2 font-semibold ${decisionClass}">${esc(c.decision)}</td>
+        <td class="whitespace-nowrap px-3 py-2 font-semibold text-white">${prob}</td>
+        <td class="whitespace-nowrap px-3 py-2">${fmtUSD(f.entryMC)}</td>
+        <td class="whitespace-nowrap px-3 py-2">${c.score ?? '-'} / ${c.maxScore ?? '-'}</td>
+        <td class="min-w-[180px] px-3 py-2 text-slate-400">${esc(c.decisionReason || c.stage || '-')}</td>
+        <td class="min-w-[260px] px-3 py-2 text-slate-500">${esc(featureText)}</td>
+        <td class="whitespace-nowrap px-3 py-2">
+          ${c.address ? `<a class="text-blue-400 hover:text-blue-300" href="/token?address=${encodeURIComponent(c.address)}" target="_blank">detail</a>` : '-'}
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+async function load() {
+  document.getElementById('meta').textContent = 'loading...';
+  try {
+    const data = await fetch(BASE + '/api/candidates', { cache: 'no-store' }).then(r => r.json());
+    candidates = data.candidates || [];
+    const stats = data.stats || {};
+    document.getElementById('statTotal').textContent = stats.total ?? candidates.length;
+    document.getElementById('statAccepted').textContent = stats.accepted ?? '-';
+    document.getElementById('statSkipped').textContent = stats.skipped ?? '-';
+    document.getElementById('statGate').textContent = stats.minProbability == null ? 'off' : Math.round(stats.minProbability * 100) + '%';
+    render();
+  } catch {
+    document.getElementById('meta').textContent = 'offline';
+    document.getElementById('rows').innerHTML = '<tr><td colspan="10" class="px-3 py-8 text-center text-red-400">Failed to load /api/candidates.</td></tr>';
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+document.getElementById('typeFilter').addEventListener('change', render);
+document.getElementById('decisionFilter').addEventListener('change', render);
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

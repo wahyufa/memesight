@@ -187,12 +187,24 @@ function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice
   const peakMC = entryPrice > 0 ? (peakPrice / entryPrice) * mc : mc;
   const peakGainPct = entryPrice > 0 ? ((peakPrice - entryPrice) / entryPrice) * 100 : gainPct;
   const peakGainMultiple = entryPrice > 0 ? peakPrice / entryPrice : gainMultiple;
+  const roundedPeakMC = Math.round(peakMC);
+  const roundedGainPct = parseFloat(peakGainPct.toFixed(2));
+  const roundedGainMultiple = parseFloat(peakGainMultiple.toFixed(2));
+  const peakAt = Date.now();
+  const durationToPeakMs = peakAt - entry.addedAt;
 
   const existing = db.wins.records.find(r => r.address === entry.token.address);
   if (existing) {
-    existing.peakMC       = Math.max(existing.peakMC ?? 0, Math.round(peakMC));
-    existing.gainPct      = Math.max(existing.gainPct ?? 0, parseFloat(peakGainPct.toFixed(2)));
-    existing.gainMultiple = Math.max(existing.gainMultiple ?? 0, parseFloat(peakGainMultiple.toFixed(2)));
+    const improvedPeak = roundedPeakMC > (existing.peakMC ?? 0)
+      || roundedGainMultiple > (existing.gainMultiple ?? 0)
+      || roundedGainPct > (existing.gainPct ?? 0);
+    existing.peakMC       = Math.max(existing.peakMC ?? 0, roundedPeakMC);
+    existing.gainPct      = Math.max(existing.gainPct ?? 0, roundedGainPct);
+    existing.gainMultiple = Math.max(existing.gainMultiple ?? 0, roundedGainMultiple);
+    if (improvedPeak) {
+      existing.peakAt     = peakAt;
+      existing.durationMs = durationToPeakMs;
+    }
     existing.updatedAt    = Date.now();
   } else {
     db.wins.records.push({
@@ -206,14 +218,15 @@ function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice
       type,
       signal:       signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
       entryMC:      mc,
-      peakMC:       Math.round(peakMC),
-      gainPct:      parseFloat(peakGainPct.toFixed(2)),
-      gainMultiple: parseFloat(peakGainMultiple.toFixed(2)),
+      peakMC:       roundedPeakMC,
+      gainPct:      roundedGainPct,
+      gainMultiple: roundedGainMultiple,
       score:        entry.score ?? null,
       maxScore:     entry.maxScore ?? null,
       feeSol:       entry.fee?.sol ?? tokenFeeSol(entry.token),
       feeRoute:     entry.fee?.route ?? feeProfile(entry.token).route,
-      durationMs:   Date.now() - entry.addedAt,
+      peakAt,
+      durationMs:   durationToPeakMs,
     });
     if (db.wins.records.length > MAX_RECORDS) db.wins.records = db.wins.records.slice(-MAX_RECORDS);
   }

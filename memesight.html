@@ -72,7 +72,7 @@ tailwind.config = {
   }
   .dark header .font-display { color: var(--text-hi) !important; }
   .dark .status-bar {
-    background: rgba(19,22,31,.6) !important;
+    background: rgba(19,22,31,.55) !important;
     border-color: var(--border) !important;
   }
 
@@ -132,19 +132,22 @@ tailwind.config = {
 
   /* ── Filter pills ─────────────────────────────────────────────────────── */
   .dark .filter-btn,
-  .dark .time-btn {
+  .dark .time-btn,
+  .dark .watch-tab {
     border-color: var(--border2) !important;
     color: var(--text) !important;
     background: transparent !important;
   }
   .dark .filter-btn.active,
-  .dark .time-btn.active {
+  .dark .time-btn.active,
+  .dark .watch-tab.active {
     background: var(--surface2) !important;
     border-color: rgba(255,255,255,.18) !important;
     color: var(--text-hi) !important;
   }
   .dark .filter-btn:hover,
-  .dark .time-btn:hover {
+  .dark .time-btn:hover,
+  .dark .watch-tab:hover {
     background: var(--surface) !important;
     color: var(--text-hi) !important;
   }
@@ -156,7 +159,16 @@ tailwind.config = {
   .dark .watchlist-table,
   .dark .watchlist-table table { background: var(--surface) !important; }
   .dark .watchlist-table thead tr { background: var(--bg2) !important; }
+  .watchlist-table .row-hover:hover { background:#f8fafc; }
+  .watchlist-table .row-hover.cursor-pointer:hover {
+    background:#ecfdf5;
+    box-shadow: inset 3px 0 0 rgba(16,185,129,.55);
+  }
   .dark .row-hover:hover { background: var(--surface2) !important; }
+  .dark .watchlist-table .row-hover.cursor-pointer:hover {
+    background: var(--surface2) !important;
+    box-shadow: inset 3px 0 0 rgba(52,211,153,.55) !important;
+  }
   .dark [class*="border-slate-200/70"] { border-color: var(--border) !important; }
   .dark .watchlist-table[style*="box-shadow"] {
     box-shadow: 0 0 0 1px rgba(52,211,153,.08), 0 4px 24px -4px rgba(52,211,153,.07) !important;
@@ -202,6 +214,11 @@ tailwind.config = {
 
   /* ── Misc ─────────────────────────────────────────────────────────────── */
   .pill-exit { background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; }
+  .watch-tab-tooltip {
+    width:max-content;
+    max-width:min(34rem, calc(100vw - 2rem));
+    white-space:normal;
+  }
   .card-strong { border-color:#bbf7d0; box-shadow:0 14px 35px -28px rgba(16,185,129,.5); }
   .dark .card-strong { border-color:rgba(22,101,52,.6) !important; box-shadow:0 0 0 1px rgba(74,222,128,.12), 0 14px 35px -20px rgba(74,222,128,.12) !important; }
   .card-medium { border-color:#fde68a; }
@@ -227,21 +244,17 @@ tailwind.config = {
   @media(min-width:768px) { .watchlist-table{display:block} .watchlist-cards{display:none} }
 </style>
 </head>
-<body class="text-slate-600 min-h-screen antialiased">
+<body class="text-slate-600 min-h-screen antialiased pb-9">
 
 <!-- ─── Header ─────────────────────────────────────────────────────────── -->
 <header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm bg-[#f9fafb]/80">
-  <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
+  <div class="w-full px-6 h-14 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2" aria-label="Back to landing page">
       <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto dark:hidden"/>
       <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto hidden dark:block"/>
       <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold">BETA</span>
     </a>
     <div class="flex items-center gap-3">
-      <div class="text-right hidden sm:block">
-        <div class="text-xs text-slate-500 dark:text-slate-600">Refreshes in</div>
-        <div class="text-sm font-mono font-bold text-emerald-400" id="countdown">5:00</div>
-      </div>
       <!-- Dark mode toggle -->
       <button id="darkBtn" onclick="toggleDark()"
         title="Toggle dark mode"
@@ -261,100 +274,122 @@ tailwind.config = {
 </header>
 
 <!-- ─── Status bar ──────────────────────────────────────────────────────── -->
-<div class="status-bar border-b border-slate-200/60 bg-white/70">
-  <div class="max-w-[1400px] mx-auto px-6 py-2 flex items-center gap-5 text-xs text-slate-500">
+<div class="status-bar fixed bottom-0 inset-x-0 z-40 border-t border-slate-200/60 bg-white/55 backdrop-blur-md dark:bg-[#13161f]/55 dark:border-[#2a2d3a]">
+  <div class="w-full px-6 py-1.5 flex items-center gap-4 text-[11px] leading-none text-slate-500 dark:text-slate-400">
     <div class="flex items-center gap-1.5">
       <div class="w-1.5 h-1.5 rounded-full bg-emerald-400" id="apiDot" style="box-shadow:0 0 5px #34d399"></div>
       <span id="apiStatus">connecting…</span>
     </div>
-    <span>Scans: <span class="text-slate-700" id="hdrScans">—</span></span>
-    <span>Tokens seen: <span class="text-slate-700" id="hdrSeen">—</span></span>
-    <span>Uptime: <span class="text-slate-700" id="hdrUptime">—</span></span>
-    <span class="ml-auto text-slate-400">⚠️ Not financial advice — DYOR</span>
+    <span>Scans: <span class="text-slate-700 dark:text-slate-200" id="hdrScans">—</span></span>
+    <span>Tokens seen: <span class="text-slate-700 dark:text-slate-200" id="hdrSeen">—</span></span>
+    <span>Uptime: <span class="text-slate-700 dark:text-slate-200" id="hdrUptime">—</span></span>
+    <span class="ml-auto">Refreshes in <span class="font-mono font-semibold text-emerald-500" id="countdown">5:00</span></span>
   </div>
 </div>
 
+<div id="copyToast" class="hidden fixed bottom-10 left-1/2 z-[10000] -translate-x-1/2 rounded-full border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-600 shadow-lg dark:border-emerald-800 dark:bg-[#1a1d27] dark:text-emerald-300">
+  CA copied
+</div>
+
 <div class="border-b border-emerald-200/70 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-900/50">
-  <div class="max-w-[1400px] mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center gap-3 text-sm">
-    <div class="flex items-start gap-3 text-emerald-900 dark:text-emerald-100">
-      <div class="mt-0.5 w-8 h-8 rounded-full bg-white/80 dark:bg-[#1a1d27] border border-emerald-200/80 dark:border-emerald-800/70 flex items-center justify-center text-emerald-600 dark:text-emerald-300 flex-shrink-0">
-        <i class="ph ph-flask" style="font-size:16px"></i>
+  <div class="w-full px-4 sm:px-6 py-2 flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
+    <div class="flex items-center gap-2.5 text-emerald-900 dark:text-emerald-100">
+      <div class="w-6 h-6 rounded-full bg-white/80 dark:bg-[#1a1d27] border border-emerald-200/80 dark:border-emerald-800/70 flex items-center justify-center text-emerald-600 dark:text-emerald-300 flex-shrink-0">
+        <i class="ph ph-flask" style="font-size:13px"></i>
       </div>
       <div>
-        <div class="font-semibold">Beta tool is live: Call List</div>
-        <div class="text-xs sm:text-sm text-emerald-700/80 dark:text-emerald-200/75">Track every scanner call, pending exits, settled wins/losses, and signal performance from one place.</div>
+        <div class="font-semibold leading-tight">Beta tool is live: Call List</div>
+        <div class="text-[11px] leading-tight text-emerald-700/80 dark:text-emerald-200/75">Track calls, pending exits, settled wins/losses, and signal performance.</div>
       </div>
     </div>
-    <a href="/call" class="sm:ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm">
-      Open Call List <i class="ph ph-arrow-right" style="font-size:14px"></i>
+    <a href="/call" class="sm:ml-auto inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm">
+      Open Call List <i class="ph ph-arrow-right" style="font-size:12px"></i>
     </a>
   </div>
 </div>
 
-<main class="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+<main class="w-full px-4 sm:px-6 py-6 space-y-6">
 
-  <!-- ─── Win Rate Bar ────────────────────────────────────────────────────── -->
-  <div id="winRateBar" class="hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
-    <div class="flex flex-wrap gap-6 items-center p-4">
-      <div>
-        <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Overall Win Rate</div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-2xl font-bold text-[#0a1b33]" id="wr-overall">—</span>
-          <span class="text-sm text-slate-500" id="wr-overall-total"></span>
+  <section class="grid gap-4 xl:grid-cols-[380px_1fr] items-stretch">
+    <!-- ─── Win Rate Bar ──────────────────────────────────────────────────── -->
+    <div id="winRateBar" class="rounded-2xl border border-slate-200/60 bg-white shadow-sm h-full">
+      <div class="h-full flex flex-col justify-between gap-4 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Overall Win Rate</div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-2xl font-bold text-[#0a1b33]" id="wr-overall">—</span>
+              <span class="text-sm text-slate-500" id="wr-overall-total"></span>
+            </div>
+          </div>
+          <button id="winHistoryToggle" class="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-all">
+            History
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+          <div>
+            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Avg ROI</div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-xl font-bold text-emerald-500" id="wr-avg-mult">—</span>
+              <span class="text-xs text-emerald-400" id="wr-avg-gain"></span>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Tracked</div>
+            <div class="text-xl font-bold text-[#0a1b33]"><span id="wr-sessions">—</span></div>
+          </div>
         </div>
       </div>
-      <div class="h-10 w-px bg-slate-200"></div>
-      <div>
-        <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Avg ROI · all calls</div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-2xl font-bold text-emerald-500" id="wr-avg-mult">—</span>
-          <span class="text-sm text-emerald-400" id="wr-avg-gain"></span>
-        </div>
-      </div>
-      <div class="ml-auto flex items-center gap-4">
-        <span class="text-xs text-slate-400">Based on <span id="wr-sessions">—</span> tracked tokens</span>
-        <button id="winHistoryToggle" class="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-all flex items-center gap-1.5">
-          Show history <span id="winHistoryChevron">▼</span>
-        </button>
-      </div>
     </div>
-    <div id="winHistoryTable" class="hidden border-t border-slate-200/70 dark:border-[#2a2d3a] overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-600 bg-slate-50/80 dark:bg-[#0f1117]/50">
-            <th class="px-4 py-3 text-left">Token</th>
-            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="signal">Signal <span class="wh-arrow hidden">↑</span></th>
-            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="type">Type <span class="wh-arrow hidden">↑</span></th>
-            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="entryMC">Entry MC <span class="wh-arrow hidden">↑</span></th>
-            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="peakMC">Peak MC <span class="wh-arrow hidden">↑</span></th>
-            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="gainMultiple">Gain <span class="wh-arrow sort-active">↓</span></th>
-            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="durationMs">Duration <span class="wh-arrow hidden">↑</span></th>
-            <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="ts">Called <span class="wh-arrow hidden">↑</span></th>
-          </tr>
-        </thead>
-        <tbody id="winHistoryBody">
-          <tr><td colspan="8" class="text-center py-8 text-slate-400">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
-  <!-- ─── Section 1: Top 5 ──────────────────────────────────────────────── -->
-  <section>
-    <div class="flex items-center gap-3 mb-4">
-      <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500">Top 5 Performers</h2>
-      <div class="flex-1 h-px bg-slate-200/25"></div>
-      <span class="text-xs text-slate-400">all-time best calls · ranked by peak gain</span>
-    </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4" id="top5Container">
-      <!-- cards injected here -->
-      <div class="text-slate-400 text-sm py-8 w-full text-center">Loading…</div>
+    <div class="rounded-2xl border border-slate-200/60 bg-white shadow-sm p-4 dark:bg-[#1a1d27] dark:border-[#2a2d3a]">
+      <div class="flex items-center gap-3 mb-3">
+        <h2 class="font-display text-sm font-bold uppercase tracking-widest text-slate-500">Top 5 Performers</h2>
+        <div class="flex-1 h-px bg-slate-200/25"></div>
+        <span class="hidden sm:inline text-xs text-slate-400">ranked by peak gain</span>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" id="top5Container">
+        <div class="text-slate-400 text-sm py-8 w-full text-center">Loading…</div>
+      </div>
     </div>
   </section>
 
-  <!-- ─── Section 2: Watchlist ──────────────────────────────────────────── -->
+  <div id="winHistoryTable" class="hidden fixed top-0 right-0 bottom-0 left-0 z-[9999] min-h-screen w-screen bg-black/60 backdrop-blur-sm p-4 sm:p-6" onclick="if(event.target===this)closeWinHistory()">
+    <div class="mx-auto mt-8 w-full max-w-6xl rounded-2xl border border-slate-200/70 dark:border-[#2a2d3a] bg-white dark:bg-[#1a1d27] shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between gap-4 border-b border-slate-200/70 dark:border-[#2a2d3a] px-5 py-4">
+        <div>
+          <div class="font-bold text-[#0a1b33] dark:text-white">Win History</div>
+          <div class="text-xs text-slate-400">Settled wins ranked by scanner performance.</div>
+        </div>
+        <button onclick="closeWinHistory()" class="h-8 w-8 rounded-full border border-slate-200 dark:border-[#2a2d3a] text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors" aria-label="Close win history">×</button>
+      </div>
+      <div class="max-h-[72vh] overflow-auto">
+        <table class="w-full text-sm min-w-[1040px]">
+          <thead class="sticky top-0 z-10">
+            <tr class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-600 bg-slate-50/95 dark:bg-[#0f1117]/95">
+              <th class="px-4 py-3 text-left">Token</th>
+              <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="signal">Signal <span class="wh-arrow hidden">↑</span></th>
+              <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="type">Type <span class="wh-arrow hidden">↑</span></th>
+              <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="entryMC">Entry MC <span class="wh-arrow hidden">↑</span></th>
+              <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="peakMC">Peak MC <span class="wh-arrow hidden">↑</span></th>
+              <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="gainMultiple">Gain <span class="wh-arrow sort-active">↓</span></th>
+              <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="durationMs" title="Time from entry MC to recorded peak MC">Time to Peak <span class="wh-arrow hidden">↑</span></th>
+              <th class="px-4 py-3 text-left wh-sort cursor-pointer hover:text-[#0a1b33] dark:hover:text-white select-none transition-colors" data-key="ts">Called <span class="wh-arrow hidden">↑</span></th>
+              <th class="px-4 py-3 text-left">Links</th>
+            </tr>
+          </thead>
+          <tbody id="winHistoryBody">
+            <tr><td colspan="9" class="text-center py-8 text-slate-400">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Watchlist ─────────────────────────────────────────────────────── -->
   <section>
-    <div class="flex items-center gap-3 mb-4">
+    <div class="sticky top-14 z-30 -mx-4 sm:-mx-6 mb-4 border-y border-slate-200/60 bg-[#f9fafb]/90 px-4 py-3 backdrop-blur-md dark:border-[#2a2d3a] dark:bg-[#0f1117]/90 sm:px-6">
+    <div class="flex items-center gap-3 mb-3">
       <div class="flex items-center gap-2.5">
         <h2 class="font-display text-base font-extrabold uppercase tracking-widest text-[#0a1b33] dark:text-[#e8edf5]">Watchlist</h2>
         <span class="live-badge inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50">
@@ -367,23 +402,41 @@ tailwind.config = {
     </div>
 
     <!-- Filter pills -->
-    <div class="flex items-start justify-between gap-4 mb-4">
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs text-slate-500 w-10">Signal:</span>
-          <button class="filter-btn active text-xs px-3 py-1 rounded-full border transition-all" data-filter="all">All</button>
-          <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="STRONG">🟢 STRONG</button>
-          <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="MEDIUM">🟡 MEDIUM</button>
-          <button class="filter-btn text-xs px-3 py-1 rounded-full border transition-all" data-filter="LOW">⚪ LOW</button>
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-slate-100/70 p-1 overflow-visible dark:border-[#2a2d3a] dark:bg-[#101318]" id="watchTabs">
+          <button class="watch-tab active relative group text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all whitespace-nowrap" data-tab="watching">
+            Watching <span id="tabWatchingCount" class="ml-1 font-semibold">0</span>
+            <span class="watch-tab-tooltip pointer-events-none absolute left-0 top-9 z-30 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-500 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-[#2a2d3a] dark:bg-[#1a1d27] dark:text-slate-300">
+              Tokens still waiting for the win threshold.
+            </span>
+          </button>
+          <button class="watch-tab relative group text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all whitespace-nowrap" data-tab="won">
+            Won <span id="tabWonCount" class="ml-1 font-semibold">0</span>
+            <span class="watch-tab-tooltip pointer-events-none absolute left-0 top-9 z-30 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-500 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-[#2a2d3a] dark:bg-[#1a1d27] dark:text-slate-300">
+              Already counted as wins, but still monitored for milestones or low-MC drops.
+            </span>
+          </button>
+          <button class="watch-tab relative group text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all whitespace-nowrap" data-tab="misses">
+            Misses <span id="tabMissCount" class="ml-1 font-semibold">0</span>
+            <span class="watch-tab-tooltip pointer-events-none absolute left-0 top-9 z-30 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-500 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-[#2a2d3a] dark:bg-[#1a1d27] dark:text-slate-300">
+              Settled misses from expired scanner calls, sorted by peak gain.
+            </span>
+          </button>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs text-slate-500 w-10">Called:</span>
-          <button class="time-btn active text-xs px-3 py-1 rounded-full border transition-all" data-time="0">All time</button>
-          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="5">Last 5m</button>
-          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="30">Last 30m</button>
-          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="60">Last 1h</button>
-          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="360">Last 6h</button>
-          <button class="time-btn text-xs px-3 py-1 rounded-full border transition-all" data-time="1440">Last 24h</button>
+        <div class="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-slate-100/70 p-1 dark:border-[#2a2d3a] dark:bg-[#101318]">
+          <button class="filter-btn active text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-filter="all">All</button>
+          <button class="filter-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-filter="STRONG">Strong</button>
+          <button class="filter-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-filter="MEDIUM">Medium</button>
+          <button class="filter-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-filter="LOW">Low</button>
+        </div>
+        <div class="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-slate-100/70 p-1 dark:border-[#2a2d3a] dark:bg-[#101318]">
+          <button class="time-btn active text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-time="0">All</button>
+          <button class="time-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-time="5">5m</button>
+          <button class="time-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-time="30">30m</button>
+          <button class="time-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-time="60">1h</button>
+          <button class="time-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-time="360">6h</button>
+          <button class="time-btn text-xs px-3 py-1.5 rounded-lg border border-transparent transition-all" data-time="1440">24h</button>
         </div>
       </div>
       <div class="flex-shrink-0 flex items-center gap-2">
@@ -398,6 +451,7 @@ tailwind.config = {
           Legend
         </button>
       </div>
+    </div>
     </div>
 
     <!-- Legend popup -->
@@ -432,8 +486,8 @@ tailwind.config = {
     </div>
 
     <!-- Desktop table -->
-    <div class="watchlist-table rounded-2xl border border-slate-200/60 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] overflow-hidden shadow-sm" style="box-shadow:0 0 0 1px rgba(16,185,129,.08),0 4px 24px -4px rgba(16,185,129,.06)">
-      <div class="overflow-x-auto">
+    <div class="watchlist-table rounded-2xl border border-slate-200/60 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] overflow-visible shadow-sm" style="box-shadow:0 0 0 1px rgba(16,185,129,.08),0 4px 24px -4px rgba(16,185,129,.06)">
+      <div>
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200/70 dark:border-[#2a2d3a] text-xs uppercase tracking-wider text-slate-500 dark:text-slate-600 bg-slate-50/80 dark:bg-[#0f1117]/50">
@@ -513,7 +567,9 @@ let sortKey    = 'market_cap';
 let sortDir    = 1; // 1 = asc, -1 = desc
 let filterSig  = 'all';
 let filterTime = 0; // minutes, 0 = all time
+let watchTab   = 'watching';
 let allCoins   = [];
+let allMisses  = [];
 let countdown  = REFRESH_MS / 1000;
 let countdownTimer = null;
 
@@ -547,11 +603,11 @@ const tokenAgeStr = createdAt => {
   if (!createdAt) return null;
   const s = Math.floor(Date.now()/1000) - createdAt;
   if (s < 0)    return null;
-  if (s < 60)   return s+'s old';
+  if (s < 60)   return s+'s';
   const m = Math.floor(s/60);
-  if (m < 60)   return m+'m old';
+  if (m < 60)   return m+'m';
   const h = Math.floor(m/60);
-  return h+'h '+(m%60)+'m old';
+  return h+'h '+(m%60)+'m';
 };
 
 const fmtCallTime = ts => {
@@ -677,6 +733,8 @@ const mapToken = (t, migratedFlag) => {
     telegram:     t.telegram,
     createdAt:    t.createdAt || null,
     peakMC:       t.peakMC && t.peakMC > startMC ? t.peakMC : null,
+    hitAt:        t.hitAt || null,
+    lastMultiple: t.lastMultiple ?? null,
   };
 };
 
@@ -740,25 +798,50 @@ async function fetchData() {
 }
 
 // ── Filter & sort pipeline ──
-function getWatchlist() {
+const isWonCoin = coin =>
+  Boolean(coin?.hitAt) || Number(coin?.lastMultiple) > 1 || (coin?.contract && allWinsMap.has(coin.contract));
+
+function baseWatchlist() {
   const nowSec = Math.floor(Date.now() / 1000);
   const cutoffMs = filterTime > 0 ? Date.now() - filterTime * 60_000 : 0;
-  return allCoins
-    .filter(c => {
+  return allCoins.filter(c => {
       if (!c.migrated) return false;
       if (c.market_cap < MIN_MC) return false;
       if (c.createdAt && (nowSec - c.createdAt) > 3600 && c.market_cap < 10_000) return false;
       if (filterTime > 0 && (!c.called_at || c.called_at < cutoffMs)) return false;
       return true;
-    })
-    .sort((a, b) => {
-      if (sortKey === 'buy_signal') {
-        const rank = { STRONG:3, MEDIUM:2, LOW:1 };
-        return sortDir * (rank[b.buy_signal] - rank[a.buy_signal] || b.market_cap - a.market_cap);
-      }
-      const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0;
-      return sortDir * (av - bv);
     });
+}
+
+function sortCoins(list) {
+  return [...list].sort((a, b) => {
+    if (sortKey === 'buy_signal') {
+      const rank = { STRONG:3, MEDIUM:2, LOW:1 };
+      return sortDir * (rank[b.buy_signal] - rank[a.buy_signal] || b.market_cap - a.market_cap);
+    }
+    const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0;
+    return sortDir * (av - bv);
+  });
+}
+
+function getWatchlist() {
+  const scoped = baseWatchlist().filter(c => watchTab === 'won' ? isWonCoin(c) : !isWonCoin(c));
+  return sortCoins(scoped);
+}
+
+function getMissList() {
+  const cutoffMs = filterTime > 0 ? Date.now() - filterTime * 60_000 : 0;
+  return allMisses
+    .filter(m => filterSig === 'all' || m.signal === filterSig)
+    .filter(m => filterTime === 0 || (m.ts && m.ts >= cutoffMs))
+    .sort((a, b) => (b.peakGainPct ?? -999) - (a.peakGainPct ?? -999));
+}
+
+function updateWatchTabCounts() {
+  const base = baseWatchlist();
+  document.getElementById('tabWatchingCount').textContent = base.filter(c => !isWonCoin(c)).length;
+  document.getElementById('tabWonCount').textContent      = base.filter(isWonCoin).length;
+  document.getElementById('tabMissCount').textContent     = allMisses.length;
 }
 
 let allTimeTop5 = [];
@@ -773,6 +856,8 @@ async function loadTop5() {
       .sort((a, b) => b.gainMultiple - a.gainMultiple)
       .slice(0, 5);
     renderTop5(allTimeTop5);
+    updateWatchTabCounts();
+    render();
   } catch {}
 }
 
@@ -807,6 +892,7 @@ const buyLinks = contract =>
        aria-label="Open on Axiom"
        title="Axiom"
        rel="noopener noreferrer"
+       onclick="event.stopPropagation()"
        class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
       <img src="${AXIOM_LOGO_URL}" alt="" class="h-4 w-4 rounded object-contain" loading="lazy"/>
     </a>
@@ -814,6 +900,7 @@ const buyLinks = contract =>
        aria-label="Open on GMGN"
        title="GMGN"
        rel="noopener noreferrer"
+       onclick="event.stopPropagation()"
        class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
       <img src="./src/img/gmgn.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
     </a>
@@ -821,11 +908,39 @@ const buyLinks = contract =>
        aria-label="Open on Pump.fun"
        title="Pump.fun"
        rel="noopener noreferrer"
+       onclick="event.stopPropagation()"
        class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
       <img src="./src/img/pumpfun.svg" alt="" class="h-4 w-4 object-contain" loading="lazy"/>
     </a>
   </div>` :
   `<span class="text-xs text-slate-400">Address unavailable</span>`;
+
+function openTokenDetail(event, contract) {
+  if (!contract) return;
+  if (event?.target?.closest?.('a,button')) return;
+  window.open(`/token?address=${encodeURIComponent(contract)}`, '_blank', 'noopener,noreferrer');
+}
+
+let copyToastTimer = null;
+function showCopyToast(message) {
+  const toast = document.getElementById('copyToast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(() => toast.classList.add('hidden'), 1600);
+}
+
+async function copyCA(event, address) {
+  event?.stopPropagation?.();
+  if (!address) return;
+  try {
+    await navigator.clipboard.writeText(address);
+    showCopyToast('CA copied');
+  } catch {
+    showCopyToast('Copy failed');
+  }
+}
 
 // ── Render Top 5 ──
 function renderTop5(list) {
@@ -838,31 +953,24 @@ function renderTop5(list) {
     const mult     = w.gainMultiple ?? 1;
     const multDisp = mult >= 10 ? mult.toFixed(0) : mult.toFixed(1);
     const pct      = w.gainPct != null ? `+${w.gainPct.toFixed(0)}%` : `+${((mult - 1) * 100).toFixed(0)}%`;
-    const rankCls  = i === 0 ? 'ring-2 ring-amber-400/60' : '';
     const href     = w.address ? `/token?address=${encodeURIComponent(w.address)}` : '#';
     return `
-      <a href="${href}" target="_blank" rel="noopener noreferrer" class="block bg-white border rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all ${rankCls}">
-        <div class="flex items-center gap-2.5">
-          ${logoHtml(w.address, w.symbol, 9)}
-          <div class="min-w-0">
+      <a href="${href}" target="_blank" rel="noopener noreferrer" class="block bg-white border rounded-xl p-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all">
+        <div class="flex items-center gap-2 mb-2 min-w-0">
+          ${logoHtml(w.address, w.symbol, 7)}
+          <div class="min-w-0 flex-1">
             <div class="font-bold text-[#0a1b33] text-sm truncate">$${w.symbol}</div>
-            <div class="text-xs text-slate-400 truncate">${w.name ?? w.symbol}</div>
+            <div class="text-[11px] text-slate-400 truncate">${w.name ?? w.symbol}</div>
           </div>
         </div>
-
-        <div class="text-center py-1">
-          <div class="text-2xl font-extrabold text-emerald-500 leading-none">${multDisp}x</div>
-          <div class="text-xs text-emerald-400 mt-0.5">${pct}</div>
-        </div>
-
-        <div class="space-y-1 text-xs border-t border-slate-100 pt-2.5">
-          <div class="flex justify-between">
-            <span class="text-slate-400">Start MC</span>
-            <span class="font-semibold text-[#0a1b33]">${fmtUSD(w.entryMC)}</span>
+        <div class="flex items-end justify-between gap-2">
+          <div>
+            <div class="text-xl font-extrabold text-emerald-500 leading-none">${multDisp}x</div>
+            <div class="text-[11px] text-emerald-400 mt-0.5">${pct}</div>
           </div>
-          <div class="flex justify-between">
-            <span class="text-slate-400">Peak MC</span>
-            <span class="font-semibold text-emerald-600">${fmtUSD(w.peakMC)}</span>
+          <div class="text-right text-[11px] leading-tight">
+            <div class="text-slate-400">Call <span class="font-semibold text-[#0a1b33]">${fmtUSD(w.entryMC)}</span></div>
+            <div class="text-slate-400 mt-1">Peak <span class="font-semibold text-[#0a1b33]">${fmtUSD(w.peakMC)}</span></div>
           </div>
         </div>
       </a>`;
@@ -874,8 +982,9 @@ function renderWatchlist(list) {
   const filtered = filterSig === 'all' ? list : list.filter(c => c.buy_signal === filterSig);
   const body = document.getElementById('watchlistBody');
   const timeLabel = filterTime === 0 ? 'all time' : filterTime < 60 ? `last ${filterTime}m` : filterTime < 1440 ? `last ${filterTime/60}h` : 'last 24h';
+  updateWatchTabCounts();
   document.getElementById('watchlistMeta').textContent =
-    `${filtered.length} of ${list.length} coins · MC ≥ $${(MIN_MC/1000).toFixed(0)}K · ${timeLabel}`;
+    `${filtered.length} of ${list.length} ${watchTab === 'won' ? 'won tokens' : 'active coins'} · MC ≥ $${(MIN_MC/1000).toFixed(0)}K · ${timeLabel}`;
 
   if (!filtered.length) {
     body.innerHTML = `<tr><td colspan="9" class="text-center py-16 text-slate-400">No coins match the current filter</td></tr>`;
@@ -887,7 +996,7 @@ function renderWatchlist(list) {
     const warnings = getWarnings(c);
     const nowDelta = mcDeltaPct(c);
     return `
-    <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors">
+    <tr class="row-hover cursor-pointer border-b border-slate-200/70 last:border-0 transition-colors" onclick="openTokenDetail(event, '${c.contract || ''}')">
       <td class="px-3 py-2.5 text-slate-400 text-xs">${i + 1}</td>
 
       <!-- Token -->
@@ -898,12 +1007,17 @@ function renderWatchlist(list) {
             <div class="flex items-center gap-1.5">
               <span class="font-semibold text-[#0a1b33] text-sm">$${c.ticker}</span>
               ${isNew(c) ? '<span class="badge-new">new</span>' : ''}
+              ${isWonCoin(c) ? '<span class="text-[10px] font-bold uppercase tracking-wide rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5">won</span>' : ''}
             </div>
             <div class="flex items-center gap-2">
-              ${c.contract ? `<span class="text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
-                onclick="navigator.clipboard.writeText('${c.contract}')" title="Click to copy">${truncAddr(c.contract)}</span>
+              ${c.contract ? `<span class="relative inline-flex group">
+                <span class="text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
+                  onclick="copyCA(event, '${c.contract}')">${truncAddr(c.contract)}</span>
+                <span class="pointer-events-none absolute left-0 top-5 z-20 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 dark:border-[#2a2d3a] dark:bg-[#1a1d27] dark:text-slate-300">Click to copy</span>
+              </span>
               <a href="/token?address=${encodeURIComponent(c.contract)}" target="_blank"
                 rel="noopener noreferrer"
+                onclick="event.stopPropagation()"
                 class="text-xs text-blue-500/60 hover:text-blue-400 transition-colors">Detail →</a>` : ''}
             </div>
           </div>
@@ -940,13 +1054,13 @@ function renderWatchlist(list) {
       </td>
 
       <!-- Signal -->
-      <td class="px-3 py-2.5" style="min-width:160px">
-        <div class="flex items-center gap-2 mb-1">
+      <td class="px-3 py-2.5" style="min-width:260px">
+        <div class="flex items-center gap-2 min-w-0">
           ${sigBadge(c.buy_signal)}
-        </div>
-        <div class="space-y-0.5">
-          ${reasons.slice(0, 2).map(r => `<div class="text-xs text-slate-400 flex items-start gap-1"><span class="text-slate-500">·</span><span>${r}</span></div>`).join('')}
-          ${warnings.map(w => `<div class="text-xs text-amber-500/80">${w}</div>`).join('')}
+          <div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
+            ${reasons.slice(0, 3).map(r => `<span class="text-xs text-slate-400 truncate max-w-[130px]">${r}</span>`).join('<span class="text-slate-300">·</span>')}
+            ${warnings.map(w => `<span class="text-xs text-amber-500/80 truncate max-w-[140px]">${w}</span>`).join('<span class="text-slate-300">·</span>')}
+          </div>
         </div>
       </td>
 
@@ -956,8 +1070,65 @@ function renderWatchlist(list) {
   }).join('');
 }
 
+function renderMissTab() {
+  const list = getMissList();
+  const body = document.getElementById('watchlistBody');
+  const timeLabel = filterTime === 0 ? 'all time' : filterTime < 60 ? `last ${filterTime}m` : filterTime < 1440 ? `last ${filterTime/60}h` : 'last 24h';
+  updateWatchTabCounts();
+  document.getElementById('watchlistMeta').textContent =
+    `${list.length} of ${allMisses.length} misses · ${timeLabel}`;
+
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="9" class="text-center py-16 text-slate-400">No misses match the current filter</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = list.map((m, i) => {
+    const pct = m.peakGainPct ?? 0;
+    const col = pct >= 40 ? 'text-amber-500' : pct >= 0 ? 'text-slate-500' : 'text-red-400';
+    return `
+    <tr class="row-hover cursor-pointer border-b border-slate-200/70 last:border-0 transition-colors" onclick="openTokenDetail(event, '${m.address || ''}')">
+      <td class="px-3 py-2.5 text-slate-400 text-xs">${i + 1}</td>
+      <td class="px-3 py-2.5">
+        <div class="flex items-center gap-2.5">
+          ${logoHtml(m.address, m.symbol, 8)}
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="font-semibold text-[#0a1b33] dark:text-white text-sm">$${m.symbol}</span>
+              <span class="text-[10px] font-bold uppercase tracking-wide rounded-full bg-red-50 text-red-500 border border-red-200 px-1.5 py-0.5">miss</span>
+            </div>
+            <div class="flex items-center gap-2">
+              ${m.address ? `<span class="relative inline-flex group">
+                <span class="text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
+                  onclick="copyCA(event, '${m.address}')">${truncAddr(m.address)}</span>
+                <span class="pointer-events-none absolute left-0 top-5 z-20 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 dark:border-[#2a2d3a] dark:bg-[#1a1d27] dark:text-slate-300">Click to copy</span>
+              </span>
+              <a href="/token?address=${encodeURIComponent(m.address)}" target="_blank"
+                rel="noopener noreferrer"
+                onclick="event.stopPropagation()"
+                class="text-xs text-blue-500/60 hover:text-blue-400 transition-colors">Detail -></a>` : ''}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td class="px-3 py-2.5"><div class="text-sm text-slate-500">${m.ts ? timeAgo(m.ts) : '—'}</div></td>
+      <td class="px-3 py-2.5"><div class="text-sm text-slate-500">${(m.type ?? '').replace(/_/g,' ') || '—'}</div></td>
+      <td class="px-3 py-2.5"><div class="text-sm text-slate-600 dark:text-slate-400">${fmtUSD(m.entryMC)}</div></td>
+      <td class="px-3 py-2.5"><div class="font-semibold text-red-400 text-sm">Miss</div></td>
+      <td class="px-3 py-2.5"><div class="font-semibold text-sm ${col}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div><div class="text-xs text-slate-400">peak gain</div></td>
+      <td class="px-3 py-2.5">${sigBadge(m.signal ?? 'LOW')}</td>
+      <td class="px-3 py-2.5">${buyLinks(m.address)}</td>
+    </tr>`;
+  }).join('');
+}
+
 // ── Main render ──
 function render() {
+  if (watchTab === 'misses') {
+    renderMissTab();
+    renderMissCards(getMissList());
+    return;
+  }
   const watchlist = getWatchlist();
   renderWatchlist(watchlist);
 }
@@ -996,16 +1167,35 @@ document.getElementById('thSignal').addEventListener('click', () => {
 });
 
 // ── Filter buttons ──
-const filterBtnStyle  = 'bg-white border-slate-200 text-slate-500 hover:border-slate-300';
-const filterBtnActive = 'bg-emerald-50 border-emerald-200 text-emerald-700';
+const filterBtnStyle  = 'bg-transparent border-transparent text-slate-500 hover:text-[#0a1b33] dark:text-slate-400 dark:hover:text-white';
+const filterBtnActive = 'bg-[#0f1117] border-[#0f1117] text-white shadow-sm dark:bg-white dark:border-white dark:text-[#0f1117]';
+
+document.querySelectorAll('.watch-tab').forEach(btn => {
+  btn.className += ' ' + (btn.dataset.tab === watchTab ? filterBtnActive : filterBtnStyle);
+  btn.addEventListener('click', () => {
+    watchTab = btn.dataset.tab;
+    document.querySelectorAll('.watch-tab').forEach(b => {
+      b.classList.remove('active');
+      b.classList.remove(...filterBtnActive.split(' '));
+      b.classList.add(...filterBtnStyle.split(' '));
+    });
+    btn.classList.add('active');
+    btn.classList.remove(...filterBtnStyle.split(' '));
+    btn.classList.add(...filterBtnActive.split(' '));
+    render();
+  });
+});
+
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.className += ' ' + (btn.dataset.filter === 'all' ? filterBtnActive : filterBtnStyle);
   btn.addEventListener('click', () => {
     filterSig = btn.dataset.filter;
     document.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.remove('active');
       b.classList.remove(...filterBtnActive.split(' '));
       b.classList.add(...filterBtnStyle.split(' '));
     });
+    btn.classList.add('active');
     btn.classList.remove(...filterBtnStyle.split(' '));
     btn.classList.add(...filterBtnActive.split(' '));
     render();
@@ -1019,9 +1209,11 @@ document.querySelectorAll('.time-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     filterTime = parseInt(btn.dataset.time);
     document.querySelectorAll('.time-btn').forEach(b => {
+      b.classList.remove('active');
       b.classList.remove(...filterBtnActive.split(' '));
       b.classList.add(...filterBtnStyle.split(' '));
     });
+    btn.classList.add('active');
     btn.classList.remove(...filterBtnStyle.split(' '));
     btn.classList.add(...filterBtnActive.split(' '));
     render();
@@ -1101,7 +1293,13 @@ const fmtDuration = ms => {
   return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
 };
 
-let winHistoryOpen = false;
+const timeToPeakMs = w => {
+  if (!w?.durationMs) return null;
+  if (w.peakAt && w.ts) return Math.max(w.durationMs, w.peakAt - (w.ts - w.durationMs));
+  if (w.updatedAt && w.ts) return Math.max(w.durationMs, w.updatedAt - (w.ts - w.durationMs));
+  return w.durationMs;
+};
+
 let winHistoryLoaded = false;
 
 let whData = [];
@@ -1112,8 +1310,8 @@ function renderWinHistory() {
   const body = document.getElementById('winHistoryBody');
   const sigRank = { STRONG: 3, MEDIUM: 2, LOW: 1 };
   const sorted = [...whData].sort((a, b) => {
-    const av = whSortKey === 'signal' ? (sigRank[a.signal] ?? 0) : (a[whSortKey] ?? 0);
-    const bv = whSortKey === 'signal' ? (sigRank[b.signal] ?? 0) : (b[whSortKey] ?? 0);
+    const av = whSortKey === 'signal' ? (sigRank[a.signal] ?? 0) : whSortKey === 'durationMs' ? (timeToPeakMs(a) ?? 0) : (a[whSortKey] ?? 0);
+    const bv = whSortKey === 'signal' ? (sigRank[b.signal] ?? 0) : whSortKey === 'durationMs' ? (timeToPeakMs(b) ?? 0) : (b[whSortKey] ?? 0);
     if (typeof av === 'string') return whSortDir * av.localeCompare(bv);
     return whSortDir * (bv - av);
   });
@@ -1142,8 +1340,9 @@ function renderWinHistory() {
         <div class="font-bold ${pos ? 'text-emerald-500' : 'text-red-400'}">${pos ? '+' : ''}${w.gainPct}%</div>
         <div class="text-xs text-slate-400">${w.gainMultiple}x</div>
       </td>
-      <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">${fmtDuration(w.durationMs)}</td>
+      <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">${fmtDuration(timeToPeakMs(w))}</td>
       <td class="px-4 py-3 text-xs text-slate-400">${w.ts ? timeAgo(w.ts) : '—'}</td>
+      <td class="px-4 py-3">${buyLinks(w.address)}</td>
     </tr>`;
   }).join('');
 }
@@ -1153,7 +1352,7 @@ async function loadWinHistory() {
   try {
     const { wins } = await fetch(BASE + '/api/wins').then(r => r.json());
     if (!wins?.length) {
-      body.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">No wins recorded yet.</td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">No wins recorded yet.</td></tr>';
       return;
     }
     whData = wins;
@@ -1175,22 +1374,30 @@ async function loadWinHistory() {
       });
     });
   } catch {
-    body.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">Failed to load win history.</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">Failed to load win history.</td></tr>';
   }
 }
 
-document.getElementById('winHistoryToggle').addEventListener('click', () => {
-  winHistoryOpen = !winHistoryOpen;
-  const table   = document.getElementById('winHistoryTable');
-  const chevron = document.getElementById('winHistoryChevron');
-  const btn     = document.getElementById('winHistoryToggle');
-  table.classList.toggle('hidden', !winHistoryOpen);
-  chevron.textContent  = winHistoryOpen ? '▲' : '▼';
-  btn.firstChild.textContent = winHistoryOpen ? 'Hide history ' : 'Show history ';
-  if (winHistoryOpen && !winHistoryLoaded) {
+function openWinHistory() {
+  const modal = document.getElementById('winHistoryTable');
+  if (modal.parentElement !== document.body) document.body.appendChild(modal);
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  if (!winHistoryLoaded) {
     winHistoryLoaded = true;
     loadWinHistory();
   }
+}
+
+function closeWinHistory() {
+  document.getElementById('winHistoryTable').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('winHistoryToggle').addEventListener('click', openWinHistory);
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeWinHistory();
 });
 
 // ── Legend ──
@@ -1282,6 +1489,7 @@ function renderMobileCards(list) {
           <div class="flex items-center gap-1.5">
             <span class="font-bold text-[#0a1b33] dark:text-white">$${c.ticker}</span>
             ${isNew(c) ? '<span class="badge-new">new</span>' : ''}
+            ${isWonCoin(c) ? '<span class="text-[10px] font-bold uppercase tracking-wide rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5">won</span>' : ''}
           </div>
           <div class="text-xs text-slate-400 truncate">${c.name}</div>
         </div>
@@ -1313,12 +1521,60 @@ function renderMobileCards(list) {
   }).join('');
 }
 
+function renderMissCards(list) {
+  const el = document.getElementById('watchlistCards');
+  if (!list.length) {
+    el.innerHTML = '<div class="text-center py-16 text-slate-400 text-sm">No misses match filters.</div>';
+    return;
+  }
+  el.innerHTML = list.map(m => {
+    const pct = m.peakGainPct ?? 0;
+    const col = pct >= 40 ? 'text-amber-500' : pct >= 0 ? 'text-slate-500' : 'text-red-400';
+    const sigCls = m.signal === 'STRONG' ? 'signal-strong' : m.signal === 'MEDIUM' ? 'signal-medium' : 'signal-low';
+    return `
+    <div class="rounded-2xl border border-slate-200/60 dark:border-[#2a2d3a] bg-white dark:bg-[#1a1d27] p-4 shadow-sm">
+      <div class="flex items-center gap-3 mb-3">
+        ${logoHtml(m.address, m.symbol, 10)}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold text-[#0a1b33] dark:text-white">$${m.symbol}</span>
+            <span class="text-[10px] font-bold uppercase tracking-wide rounded-full bg-red-50 text-red-500 border border-red-200 px-1.5 py-0.5">miss</span>
+          </div>
+          <div class="text-xs text-slate-400 truncate">${(m.type ?? '').replace(/_/g,' ') || 'settled'}</div>
+        </div>
+        <span class="${sigCls} text-xs font-bold px-2 py-0.5 rounded-full">${m.signal ?? 'LOW'}</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-xs mb-3">
+        <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Entry</div>
+          <div class="font-semibold text-[#0a1b33] dark:text-slate-300">${fmtUSD(m.entryMC)}</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Peak</div>
+          <div class="font-semibold ${col}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
+          <div class="text-slate-400 mb-0.5">Status</div>
+          <div class="font-semibold text-red-400">Miss</div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        <div class="text-xs text-slate-400">${m.ts ? timeAgo(m.ts) : '—'}</div>
+        ${buyLinks(m.address)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ── Miss analysis ──
 async function loadMisses() {
   try {
     const { misses } = await fetch(BASE + '/api/misses').then(r => r.json());
+    allMisses = misses || [];
+    updateWatchTabCounts();
+    if (watchTab === 'misses') render();
     if (!misses?.length) return;
-    document.getElementById('missSection').classList.remove('hidden');
+    document.getElementById('missSection').classList.add('hidden');
     const body = document.getElementById('missBody');
     body.innerHTML = misses.slice(0, 50).map(m => {
       const pct = m.peakGainPct ?? 0;
@@ -1349,7 +1605,7 @@ renderWatchlist = function(list) {
   _origRenderWatchlist(list);
   const filtered = filterSig === 'all' ? list : list.filter(c => c.buy_signal === filterSig);
   renderMobileCards(filtered);
-  checkNewSignals(filtered);
+  if (watchTab === 'watching') checkNewSignals(filtered);
 };
 
 // ── Near-misses toggle ──

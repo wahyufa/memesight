@@ -92,27 +92,35 @@ tailwind.config = {
   .filter-pill {
     display:inline-flex; align-items:center;
     font-size:12px; font-weight:500;
-    padding:4px 12px; border-radius:999px;
-    border:1px solid var(--border2);
+    padding:6px 12px; border-radius:8px;
+    border:1px solid transparent;
     color:var(--text);
     background:transparent;
     cursor:pointer;
     transition:all .15s;
     white-space:nowrap;
   }
-  .filter-pill:hover { border-color:#94a3b8; color:var(--text-hi); }
+  .filter-pill:hover { background:var(--surface); color:var(--text-hi); }
   .filter-pill.active {
-    background:#ecfdf5; border-color:#6ee7b7; color:#065f46;
+    background:#0f1117; border-color:#0f1117; color:#fff; box-shadow:0 1px 2px rgba(15,23,42,.12);
   }
   .dark .filter-pill.active {
-    background:rgba(5,46,22,.5); border-color:rgba(74,222,128,.3); color:#4ade80;
+    background:#fff; border-color:#fff; color:#0f1117;
   }
 
   /* ── Table ── */
   .call-table { background:var(--surface); }
   .dark .call-table thead tr { background:var(--bg2) !important; }
-  .row-hover:hover { background:var(--surface2); }
+  .row-hover:hover { background:#f8fafc; }
+  .row-hover.cursor-pointer:hover {
+    background:#ecfdf5;
+    box-shadow: inset 3px 0 0 rgba(16,185,129,.55);
+  }
   .dark .row-hover:hover { background:var(--surface2) !important; }
+  .dark .row-hover.cursor-pointer:hover {
+    background:var(--surface2) !important;
+    box-shadow: inset 3px 0 0 rgba(52,211,153,.55) !important;
+  }
   .dark .call-wrap { background:var(--surface) !important; border-color:var(--border) !important; }
 
   /* ── Dark overrides ── */
@@ -128,7 +136,7 @@ tailwind.config = {
   .dark [class*="text-slate-500"] { color:#5e718a !important; }
   .dark [class*="divide-slate"] > * + * { border-color:var(--border) !important; }
   .dark [class*="border-slate-200/70"] { border-color:var(--border) !important; }
-  .dark .stat-strip { background:rgba(28,32,50,.7) !important; border-color:var(--border) !important; }
+  .dark .stat-strip { background:rgba(19,22,31,.55) !important; border-color:var(--border) !important; }
 
   /* ── Responsive ── */
   @media(max-width:767px) { .desktop-table{display:none} .mobile-cards{display:block} }
@@ -144,19 +152,19 @@ tailwind.config = {
   .fade-in { animation:fadeIn .18s ease; }
 </style>
 </head>
-<body class="text-slate-600 min-h-screen antialiased">
+<body class="text-slate-600 min-h-screen antialiased pb-9">
 
 <!-- ─── Header ─────────────────────────────────────────────────────────── -->
 <header class="sticky top-0 z-50 border-b border-slate-200/60 backdrop-blur-sm">
-  <div class="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
-    <a href="/" class="flex items-center gap-3" aria-label="Back to landing page">
+  <div class="w-full px-6 h-14 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2" aria-label="Back to landing page">
       <img src="./src/img/logo signed _ green.svg" alt="Signd" class="h-7 w-auto"/>
       <span class="text-slate-300 dark:text-slate-600 hidden sm:block">·</span>
       <span class="font-display font-bold text-sm text-[#0a1b33] dark:text-[#e8edf5] hidden sm:block">Call List</span>
       <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-semibold dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50">BETA</span>
     </a>
     <div class="flex items-center gap-3">
-      <span class="text-xs text-slate-400 hidden sm:block" id="lastUpdated">—</span>
+      <span class="text-xs text-slate-400 hidden sm:block" id="lastUpdatedHeader">—</span>
       <button onclick="toggleDark()"
         class="w-9 h-9 rounded-full flex items-center justify-center border border-slate-200 bg-white dark:bg-[#1a1d27] dark:border-[#2a2d3a] text-slate-500 dark:text-slate-400 hover:text-[#0a1b33] dark:hover:text-white transition-colors shadow-sm">
         <i class="ph ph-moon" style="font-size:15px" id="darkIcon"></i>
@@ -174,8 +182,8 @@ tailwind.config = {
 </header>
 
 <!-- ─── Stats strip ─────────────────────────────────────────────────────── -->
-<div class="stat-strip border-b border-slate-200/60 bg-white/70">
-  <div class="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-5 flex-wrap text-xs">
+<div class="stat-strip fixed bottom-0 inset-x-0 z-40 border-t border-slate-200/60 bg-white/55 backdrop-blur-md dark:bg-[#13161f]/55 dark:border-[#2a2d3a]">
+  <div class="w-full px-6 py-1.5 flex items-center gap-4 flex-wrap text-[11px] leading-none text-slate-500 dark:text-slate-400">
     <div class="flex items-center gap-1.5">
       <div class="w-1.5 h-1.5 rounded-full bg-slate-400" id="statusDot"></div>
       <span class="text-slate-500 font-medium" id="statusTxt">connecting…</span>
@@ -195,15 +203,20 @@ tailwind.config = {
       <span><span class="sig-medium text-xs font-bold px-1.5 py-0.5 rounded-full">M</span> <span id="tier-MEDIUM" class="text-slate-500">—</span></span>
       <span><span class="sig-low text-xs font-bold px-1.5 py-0.5 rounded-full">L</span> <span id="tier-LOW" class="text-slate-500">—</span></span>
     </div>
-    <span class="ml-auto text-slate-400">⚠️ Not financial advice — DYOR</span>
+    <span class="ml-auto text-slate-400" id="lastUpdated">—</span>
   </div>
 </div>
 
-<!-- ─── Main ────────────────────────────────────────────────────────────── -->
-<main class="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+<div id="copyToast" class="hidden fixed bottom-10 left-1/2 z-[10000] -translate-x-1/2 rounded-full border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-600 shadow-lg dark:border-emerald-800 dark:bg-[#1a1d27] dark:text-emerald-300">
+  CA copied
+</div>
 
+<!-- ─── Main ────────────────────────────────────────────────────────────── -->
+<main class="w-full px-4 sm:px-6 py-6 space-y-4">
+
+  <div class="sticky top-14 z-30 -mx-4 sm:-mx-6 mb-4 border-y border-slate-200/60 bg-[#f9fafb]/90 px-4 py-3 backdrop-blur-md dark:border-[#2a2d3a] dark:bg-[#0f1117]/90 sm:px-6">
   <!-- Section header -->
-  <div class="flex items-center gap-3 mb-5">
+  <div class="flex items-center gap-3 mb-3">
     <h2 class="font-display text-base font-extrabold uppercase tracking-widest text-[#0a1b33] dark:text-[#e8edf5]">Call List</h2>
     <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50">
       <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
@@ -214,10 +227,10 @@ tailwind.config = {
   </div>
 
   <!-- Filters -->
-  <div class="flex flex-col gap-2.5 mb-5">
+  <div class="flex items-center gap-3 flex-wrap">
     <div class="flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-slate-500 w-20 shrink-0">Signal:</span>
-      <div class="flex gap-1.5 flex-wrap" id="sigFilters">
+      <span class="text-xs text-slate-500 shrink-0">Signal:</span>
+      <div class="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-slate-100/70 p-1 flex-wrap dark:border-[#2a2d3a] dark:bg-[#101318]" id="sigFilters">
         <button class="filter-pill active" data-val="all">All</button>
         <button class="filter-pill" data-val="STRONG">STRONG</button>
         <button class="filter-pill" data-val="MEDIUM">MEDIUM</button>
@@ -225,8 +238,8 @@ tailwind.config = {
       </div>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-slate-500 w-20 shrink-0">Timeframe:</span>
-      <div class="flex gap-1.5 flex-wrap" id="tfFilters">
+      <span class="text-xs text-slate-500 shrink-0">Timeframe:</span>
+      <div class="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-slate-100/70 p-1 flex-wrap dark:border-[#2a2d3a] dark:bg-[#101318]" id="tfFilters">
         <button class="filter-pill active" data-val="all">All</button>
         <button class="filter-pill" data-val="very_short">Very short</button>
         <button class="filter-pill" data-val="short">Short</button>
@@ -236,8 +249,8 @@ tailwind.config = {
       </div>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-slate-500 w-20 shrink-0">Verdict:</span>
-      <div class="flex gap-1.5 flex-wrap" id="verdictFilters">
+      <span class="text-xs text-slate-500 shrink-0">Verdict:</span>
+      <div class="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-slate-100/70 p-1 flex-wrap dark:border-[#2a2d3a] dark:bg-[#101318]" id="verdictFilters">
         <button class="filter-pill active" data-val="all">All</button>
         <button class="filter-pill" data-val="W">W (wins)</button>
         <button class="filter-pill" data-val="L">L (losses)</button>
@@ -245,11 +258,12 @@ tailwind.config = {
       </div>
     </div>
   </div>
+  </div>
 
   <!-- Desktop table -->
-  <div class="desktop-table call-wrap rounded-2xl border border-slate-200/60 bg-white overflow-hidden shadow-sm" style="box-shadow:0 0 0 1px rgba(16,185,129,.08),0 4px 24px -4px rgba(16,185,129,.06)">
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm call-table" style="min-width:1120px">
+  <div class="desktop-table call-wrap rounded-2xl border border-slate-200/60 bg-white overflow-visible shadow-sm" style="box-shadow:0 0 0 1px rgba(16,185,129,.08),0 4px 24px -4px rgba(16,185,129,.06)">
+    <div>
+      <table class="w-full text-sm call-table">
         <thead>
           <tr class="border-b border-slate-200/70 text-xs uppercase tracking-wider text-slate-500 bg-slate-50/80">
             <th class="px-4 py-3 text-left w-8">#</th>
@@ -402,12 +416,40 @@ function tradeLinks(c) {
   return `<div class="flex items-center justify-end gap-1.5">
     ${items.map(([label, href, src, extraClass]) => `
       <a href="${href}" target="_blank" rel="noopener noreferrer" title="${label}"
+         onclick="event.stopPropagation()"
          aria-label="Open on ${label}"
          class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition-colors hover:border-emerald-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#151925] dark:hover:border-emerald-700">
         <img src="${src}" alt="" class="h-4 w-4 object-contain ${extraClass}" loading="lazy"/>
       </a>
     `).join('')}
   </div>`;
+}
+
+function openTokenDetail(event, address) {
+  if (!address) return;
+  if (event?.target?.closest?.('a,button')) return;
+  window.open(`/token?address=${encodeURIComponent(address)}`, '_blank', 'noopener,noreferrer');
+}
+
+let copyToastTimer = null;
+function showCopyToast(message) {
+  const toast = document.getElementById('copyToast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(() => toast.classList.add('hidden'), 1600);
+}
+
+async function copyCA(event, address) {
+  event?.stopPropagation?.();
+  if (!address) return;
+  try {
+    await navigator.clipboard.writeText(address);
+    showCopyToast('CA copied');
+  } catch {
+    showCopyToast('Copy failed');
+  }
 }
 
 // ─── Render desktop table ───────────────────────────────────────────────────
@@ -436,56 +478,59 @@ function renderTable(list) {
          ${trajectoryDots(c.snapshots)}`;
 
     return `
-    <tr class="row-hover border-b border-slate-200/70 last:border-0 transition-colors fade-in">
-      <td class="px-4 py-3 text-xs text-slate-400">${i + 1}</td>
+    <tr class="row-hover cursor-pointer border-b border-slate-200/70 last:border-0 transition-colors fade-in" onclick="openTokenDetail(event, '${c.addrFull || ''}')">
+      <td class="px-3 py-2.5 text-xs text-slate-400">${i + 1}</td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         <div class="flex items-center gap-2.5">
           ${logo(c.addrFull, c.ticker, 32)}
           <div>
             <div class="font-semibold text-[#0a1b33] dark:text-[#e8edf5] text-sm">$${c.ticker}</div>
             <div class="flex items-center gap-2">
-              <span class="text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                onclick="navigator.clipboard.writeText('${c.addrFull}')" title="Click to copy">${c.addrDisplay}</span>
+              <span class="relative inline-flex group">
+                <span class="text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  onclick="copyCA(event, '${c.addrFull}')">${c.addrDisplay}</span>
+                <span class="pointer-events-none absolute left-0 top-5 z-20 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 dark:border-[#2a2d3a] dark:bg-[#1a1d27] dark:text-slate-300">Click to copy</span>
+              </span>
             </div>
           </div>
         </div>
       </td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         <div class="text-sm text-slate-600 dark:text-slate-400">${timeAgo(c.msSinceCall)}</div>
         <div class="text-xs text-slate-400">@ ${c.callTimeLbl} · ${fmtK(c.mcAtCall)}</div>
       </td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         <span class="${sigCls} text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">${c.signal}</span>
       </td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         <div class="text-sm font-semibold text-slate-700 dark:text-slate-300">${c.estRange}</div>
         <div class="text-xs text-slate-400">≥${c.winThreshold}% to win</div>
       </td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         <span class="${tfCls} text-xs font-semibold px-2 py-0.5 rounded-md">${tfLbl}</span>
         <div class="text-xs text-slate-400 mt-1 font-mono">${c.exitLbl}</div>
       </td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         <div class="space-y-0.5">${reasonLines(c)}</div>
       </td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         ${currentCell}
       </td>
 
-      <td class="px-4 py-3">${peakCell}</td>
+      <td class="px-3 py-2.5">${peakCell}</td>
 
-      <td class="px-4 py-3">
+      <td class="px-3 py-2.5">
         <span class="${vCls} text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">${vLbl}</span>
       </td>
 
-      <td class="px-4 py-3">${tradeLinks(c)}</td>
+      <td class="px-3 py-2.5">${tradeLinks(c)}</td>
     </tr>`;
   }).join('');
 }
@@ -506,7 +551,7 @@ function renderCards(list) {
                      c.verdict === 'L' ? `L ${fmtMaybePct(c.peakPct)}` : 'Pending';
     const curColor = c.curPct == null ? 'text-slate-400' : c.curPct >= 0 ? 'text-emerald-500' : 'text-red-400';
     return `
-    <div class="rounded-2xl border border-slate-200/60 dark:border-[rgba(255,255,255,.07)] bg-white dark:bg-[#1c2032] p-4 shadow-sm fade-in">
+    <div class="rounded-2xl border border-slate-200/60 dark:border-[rgba(255,255,255,.07)] bg-white dark:bg-[#1c2032] p-4 shadow-sm fade-in cursor-pointer transition-colors hover:bg-emerald-50/40 dark:hover:bg-[#232840]" onclick="openTokenDetail(event, '${c.addrFull || ''}')">
       <div class="flex items-center gap-3 mb-3">
         ${logo(c.addrFull, c.ticker, 40)}
         <div class="flex-1 min-w-0">
@@ -515,7 +560,10 @@ function renderCards(list) {
             <span class="${vCls} text-xs font-bold px-2 py-0.5 rounded-full">${vLbl}</span>
           </div>
           <div class="flex items-center gap-2 mt-0.5">
-            <span class="text-xs font-mono text-slate-400">${c.addrDisplay}</span>
+            <span class="relative inline-flex group">
+              <span class="text-xs font-mono text-slate-400" onclick="copyCA(event, '${c.addrFull}')">${c.addrDisplay}</span>
+              <span class="pointer-events-none absolute left-0 top-5 z-20 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 dark:border-[#2a2d3a] dark:bg-[#1a1d27] dark:text-slate-300">Click to copy</span>
+            </span>
             <span class="text-slate-300 dark:text-slate-600">·</span>
             <span class="text-xs text-slate-400">${timeAgo(c.msSinceCall)}</span>
           </div>
@@ -571,8 +619,9 @@ function updateStats(stats, filteredLen) {
   document.getElementById('statPending').textContent = stats.pending ?? '—';
   document.getElementById('statWinRate').textContent = stats.winRate != null ? stats.winRate + '%' : '—';
   document.getElementById('callMeta').textContent    = `${filteredLen} of ${stats.total ?? 0} calls`;
-  document.getElementById('lastUpdated').textContent =
-    'Updated ' + new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
+  const updatedLabel = 'Updated ' + new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
+  document.getElementById('lastUpdated').textContent = updatedLabel;
+  document.getElementById('lastUpdatedHeader').textContent = updatedLabel;
 
   // Win rate per signal tier
   const tiers = { STRONG:{w:0,l:0}, MEDIUM:{w:0,l:0}, LOW:{w:0,l:0} };

@@ -18,6 +18,7 @@ const fallbackByPath = {
   '/api/state': { calls: [], watchlist: [] },
   '/api/stats': { scans: 0, tokensSeen: 0, uptimeMs: 0 },
   '/api/misses': { misses: [] },
+  '/api/candidates': { candidates: [], stats: { total: 0, accepted: 0, skipped: 0, minProbability: null } },
 };
 
 async function proxyJson(req, res, base, fallback) {
@@ -40,7 +41,7 @@ app.get('/api/calls', async (req, res) => {
   await proxyJson(req, res, base, fallbackByPath['/api/calls']);
 });
 
-app.get(['/api/wins', '/api/signals', '/api/state', '/api/stats', '/api/misses'], async (req, res) => {
+app.get(['/api/wins', '/api/signals', '/api/state', '/api/stats', '/api/misses', '/api/candidates'], async (req, res) => {
   await proxyJson(req, res, scannerBase, fallbackByPath[req.path] || {});
 });
 

@@ -43,6 +43,7 @@ const CONFIG = {
   minGainPct:          50,      // alert at 1.5x
 
   // Step 1 — server-side filters (sent to GMGN API)
+  minMarketCap:        Number(process.env.MIN_CALL_MARKET_CAP || 5000),
   maxMarketCap:        20000,   // raised: catch tokens that already moved from $6k to $12k
   minCreatorOpenCount: 1,       // creator must have launched at least 1 graduated token before
   minTotalFee:         Number(process.env.GLOBAL_MIN_FEE_SOL || process.env.MIN_GLOBAL_FEE_SOL || 2),
@@ -66,6 +67,7 @@ const CONFIG = {
   maxWatchlistSize:    10,           // max tokens tracked at once
   maxWatchlistAgeMs:   2 * 60 * 60_000,
   klineDelayMs:        Number(process.env.GMGN_KLINE_DELAY_MS || 1_500),
+  minCallProbability:  Number(process.env.CALL_MIN_PROBABILITY || 0),
 };
 
 const GLOBAL_FEE = {
@@ -102,7 +104,9 @@ const WINS_FILE   = path.join(DATA_DIR, 'wins.json');
 const MISSES_FILE = path.join(DATA_DIR, 'misses.json');
 const CALLS_FILE  = path.join(DATA_DIR, 'calls.json');
 const SIGNALS_FILE = path.join(DATA_DIR, 'signals.json');
+const CANDIDATES_FILE = path.join(DATA_DIR, 'candidates.json');
 const MAX_RECORDS = 2000;
+const MAX_CANDIDATES = 5000;
 const recordStore = createRecordStore();
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -161,18 +165,29 @@ const db = {
   wins:   loadJSON(WINS_FILE),
   misses: loadJSON(MISSES_FILE),
   signals: loadJSON(SIGNALS_FILE),
+  candidates: loadJSON(CANDIDATES_FILE),
 };
 
 db.wins.records = await recordStore.loadRecords('wins', db.wins.records);
 db.misses.records = await recordStore.loadRecords('misses', db.misses.records);
 db.signals.records = await recordStore.loadRecords('signals', db.signals.records);
+db.candidates.records = await recordStore.loadRecords('candidates', db.candidates.records);
 
 dedupFile(WINS_FILE,   r => r.gainMultiple ?? 0);
 dedupFile(MISSES_FILE, r => r.peakGainPct  ?? 0);
 if (dedupRecords(db.wins, r => r.gainMultiple ?? 0)) saveRecords('wins', WINS_FILE, db.wins);
 if (dedupRecords(db.misses, r => r.peakGainPct ?? 0)) saveRecords('misses', MISSES_FILE, db.misses);
+if (dedupRecords(db.candidates, r => r.updatedAt ?? r.ts ?? 0)) saveRecords('candidates', CANDIDATES_FILE, db.candidates);
 await recordStore.saveRecords('wins', db.wins.records);
 await recordStore.saveRecords('misses', db.misses.records);
+await recordStore.saveRecords('candidates', db.candidates.records);
+
+const MIN_CALL_MARKET_CAP = CONFIG.minMarketCap;
+const callEntryMC = record => Number(record?.entryMC ?? record?.mcAtCall ?? record?.startMC ?? 0);
+const isEligibleMarketCap = value => Number(value) >= MIN_CALL_MARKET_CAP;
+const isEligibleCallRecord = record => isEligibleMarketCap(callEntryMC(record));
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const ratio = (num, den) => den > 0 ? num / den : 0;
 
 function signalTier(score, maxScore) {
   const n = (score ?? 0) / (maxScore || 10);
@@ -183,6 +198,7 @@ function signalTier(score, maxScore) {
 
 function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice) {
   const mc    = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
+  if (!isEligibleMarketCap(mc)) return;
   const peakPrice = Math.max(entry.peakHigh || 0, currentPrice || 0);
   const peakMC = entryPrice > 0 ? (peakPrice / entryPrice) * mc : mc;
   const peakGainPct = entryPrice > 0 ? ((peakPrice - entryPrice) / entryPrice) * 100 : gainPct;
@@ -236,6 +252,8 @@ function persistWin(entry, type, gainPct, gainMultiple, entryPrice, currentPrice
 }
 
 function persistMiss(entry, type) {
+  const entryMC = entry.entryMC ?? entry.token.usd_market_cap ?? 0;
+  if (!isEligibleMarketCap(entryMC)) return;
   const peakPrice = entry.peakHigh && entry.peakHigh > 0
     ? entry.peakHigh
     : (entry.currentClose ?? entry.firstOpen);
@@ -247,7 +265,7 @@ function persistMiss(entry, type) {
     symbol:     entry.token.symbol,
     type,
     signal:     signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
-    entryMC:    entry.entryMC ?? entry.token.usd_market_cap ?? 0,
+    entryMC,
     peakGainPct: parseFloat(gainPct.toFixed(2)),
     score:      entry.score ?? null,
     maxScore:   entry.maxScore ?? null,
@@ -261,11 +279,198 @@ function persistMiss(entry, type) {
   saveRecords('misses', MISSES_FILE, db.misses);
 }
 
+function candidateId(type, address) {
+  return `${type}:${address}`;
+}
+
+function gradMinutes(token) {
+  return token?.complete_cost_time ? token.complete_cost_time / 60 : null;
+}
+
+function tokenFeatures(token, { type, entryMC, score = null, maxScore = null, fee = null } = {}) {
+  const mc = Number(entryMC ?? token?.usd_market_cap ?? 0);
+  const buys = Number(token?.buys_24h ?? 0);
+  const sells = Number(token?.sells_24h ?? 0);
+  const bsr = sells > 0 ? buys / sells : buys;
+  const liquidity = Number(token?.liquidity ?? 0);
+  const volume1h = Number(token?.volume_1h ?? 0);
+  const volume24h = Number(token?.volume_24h ?? 0);
+  return {
+    type,
+    entryMC: mc,
+    liquidity,
+    liquidityToMC: ratio(liquidity, mc),
+    volume1h,
+    volume1hToMC: ratio(volume1h, mc),
+    volume24h,
+    volume24hToMC: ratio(volume24h, mc),
+    buys,
+    sells,
+    buySellRatio: bsr,
+    swaps24h: Number(token?.swaps_24h ?? 0),
+    smartMoney: Number(token?.smart_degen_count ?? 0),
+    kol: Number(token?.renowned_count ?? 0),
+    gradMin: gradMinutes(token),
+    holderCount: Number(token?.holder_count ?? 0),
+    bundlerRate: token?.bundler_trader_amount_rate ?? null,
+    bundlerHold: token?.bundler_mhr ?? null,
+    rugRatio: token?.rug_ratio ?? null,
+    insiderRatio: token?.rat_trader_amount_rate ?? null,
+    top10HolderRate: token?.top_10_holder_rate ?? null,
+    feeSol: fee?.sol ?? tokenFeeSol(token),
+    hasSocial: Boolean(token?.twitter || token?.telegram || token?.website || token?.has_at_least_one_social),
+    creatorOpenCount: Number(token?.creator_created_open_count ?? 0),
+    tokenAgeSec: token?.created_timestamp ? Math.max(0, Math.floor(Date.now() / 1000) - Number(token.created_timestamp)) : null,
+    score,
+    maxScore,
+    scoreRatio: maxScore ? ratio(score ?? 0, maxScore) : null,
+  };
+}
+
+function heuristicProbability(features, signal) {
+  let p = signal === 'STRONG' ? 0.44 : signal === 'MEDIUM' ? 0.34 : 0.25;
+  if (features.scoreRatio != null) p += (features.scoreRatio - 0.35) * 0.28;
+  p += clamp(features.smartMoney, 0, 12) * 0.018;
+  p += clamp(features.kol, 0, 5) * 0.012;
+  p += clamp(features.feeSol ?? 0, 0, 12) * 0.008;
+  p += features.hasSocial ? 0.025 : -0.015;
+  p += clamp(features.liquidityToMC, 0, 0.45) * 0.12;
+  p += clamp(features.volume1hToMC, 0, 3) * 0.035;
+  if (features.buySellRatio >= 1.5 && features.buySellRatio <= 6) p += 0.045;
+  if (features.buySellRatio > 10) p -= 0.06;
+  if (features.gradMin != null && features.gradMin <= 15) p += 0.055;
+  if (features.gradMin != null && features.gradMin > 60) p -= 0.035;
+  if (features.rugRatio != null) p -= clamp(features.rugRatio, 0, 0.6) * 0.12;
+  if (features.top10HolderRate != null && features.top10HolderRate > 0.65) p -= 0.08;
+  if (features.insiderRatio != null && features.insiderRatio > 0.55) p -= 0.06;
+  if (features.bundlerRate != null && features.bundlerRate < 0.20) p += 0.025;
+  if (features.bundlerHold != null && (features.bundlerHold < 0.15 || features.bundlerHold > 0.75)) p -= 0.04;
+  if (features.entryMC < MIN_CALL_MARKET_CAP) p = 0;
+  return clamp(p, 0.03, 0.88);
+}
+
+function historicalProbability(type, signal, features) {
+  const wins = db.wins.records.filter(r => isEligibleCallRecord(r) && r.type === type && r.signal === signal);
+  const misses = db.misses.records.filter(r => isEligibleCallRecord(r) && r.type === type && r.signal === signal);
+  const sampleSize = wins.length + misses.length;
+  if (!sampleSize) return { probability: null, sampleSize };
+
+  const entryMC = features.entryMC || 0;
+  const inSameMCBand = r => {
+    const mc = callEntryMC(r);
+    if (!entryMC || !mc) return true;
+    return mc >= entryMC / 2 && mc <= entryMC * 2;
+  };
+  const bandWins = wins.filter(inSameMCBand);
+  const bandMisses = misses.filter(inSameMCBand);
+  const useBand = bandWins.length + bandMisses.length >= 8;
+  const w = useBand ? bandWins.length : wins.length;
+  const l = useBand ? bandMisses.length : misses.length;
+  return {
+    probability: (w + 2) / (w + l + 4),
+    sampleSize: w + l,
+    bucket: useBand ? 'type_signal_mc_band' : 'type_signal',
+  };
+}
+
+function callProbability(token, { type, score = null, maxScore = null, fee = null, reasons = [] } = {}) {
+  const entryMC = token?.usd_market_cap ?? 0;
+  const signal = signalTier(score, maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10));
+  const features = tokenFeatures(token, { type, entryMC, score, maxScore, fee });
+  const heuristic = heuristicProbability(features, signal);
+  const hist = historicalProbability(type, signal, features);
+  const histWeight = hist.probability == null ? 0 : Math.min(0.65, hist.sampleSize / 40);
+  const probability = hist.probability == null
+    ? heuristic
+    : (heuristic * (1 - histWeight)) + (hist.probability * histWeight);
+
+  return {
+    probability: Number(probability.toFixed(4)),
+    signal,
+    features,
+    model: {
+      version: 1,
+      heuristic: Number(heuristic.toFixed(4)),
+      historical: hist.probability == null ? null : Number(hist.probability.toFixed(4)),
+      historicalSampleSize: hist.sampleSize,
+      historicalBucket: hist.bucket ?? null,
+      historicalWeight: Number(histWeight.toFixed(3)),
+      minRequired: CONFIG.minCallProbability > 0 ? CONFIG.minCallProbability : null,
+      reasons,
+    },
+  };
+}
+
+function saveCandidate({ token, type, stage, decision, decisionReason, score = null, maxScore = null, reasons = [], fee = null, probabilityInfo = null }) {
+  const address = token?.address;
+  if (!address) return null;
+  const info = probabilityInfo ?? callProbability(token, { type, score, maxScore, fee, reasons });
+  const now = Date.now();
+  const record = {
+    id: candidateId(type, address),
+    ts: now,
+    updatedAt: now,
+    address,
+    symbol: token.symbol,
+    name: token.name ?? token.symbol,
+    type,
+    stage,
+    decision,
+    decisionReason,
+    signal: info.signal,
+    score,
+    maxScore,
+    reasons,
+    probability: info.probability,
+    model: info.model,
+    features: info.features,
+    feeSol: fee?.sol ?? info.features.feeSol ?? null,
+    feeRoute: fee?.route ?? null,
+  };
+
+  const idx = db.candidates.records.findIndex(r => r.id === record.id);
+  if (idx >= 0) db.candidates.records[idx] = { ...db.candidates.records[idx], ...record, ts: db.candidates.records[idx].ts ?? record.ts };
+  else db.candidates.records.push(record);
+  if (db.candidates.records.length > MAX_CANDIDATES) db.candidates.records = db.candidates.records.slice(-MAX_CANDIDATES);
+  db.candidates.updatedAt = now;
+  saveJSON(CANDIDATES_FILE, db.candidates);
+  void recordStore.saveRecord('candidates', record);
+  return record;
+}
+
+function probabilityGate(token, { type, score, maxScore, fee, reasons = [] }) {
+  const info = callProbability(token, { type, score, maxScore, fee, reasons });
+  if (CONFIG.minCallProbability > 0 && info.probability < CONFIG.minCallProbability) {
+    saveCandidate({
+      token,
+      type,
+      stage: 'probability_gate',
+      decision: 'skip',
+      decisionReason: `probability ${info.probability} < ${CONFIG.minCallProbability}`,
+      score,
+      maxScore,
+      reasons,
+      fee,
+      probabilityInfo: info,
+    });
+    return { pass: false, info };
+  }
+  return { pass: true, info };
+}
+
 function persistSignal(entry, type, status = 'watching') {
   const token = entry.token;
   const existing = db.signals.records.find(r => r.id === `${type}:${token.address}`);
   const fee = entry.fee ?? feeProfile(token);
   const market = marketSnapshot(entry);
+  const maxScore = entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10);
+  const prob = callProbability(token, {
+    type,
+    score: entry.score ?? null,
+    maxScore,
+    fee,
+    reasons: entry.reasons ?? [],
+  });
   const record = {
     id:          `${type}:${token.address}`,
     ts:          existing?.ts ?? entry.addedAt ?? Date.now(),
@@ -275,9 +480,11 @@ function persistSignal(entry, type, status = 'watching') {
     name:        token.name ?? token.symbol,
     type,
     status,
-    signal:      signalTier(entry.score, entry.maxScore ?? (type === 'completed' ? 42 : type === 'near_completion' ? 38 : 10)),
+    signal:      signalTier(entry.score, maxScore),
     score:       entry.score ?? null,
-    maxScore:    entry.maxScore ?? null,
+    maxScore,
+    probability: prob.probability,
+    probabilityModel: prob.model,
     reasons:     entry.reasons ?? [],
     entryMC:     market.baseMC,
     currentMC:   market.currentMC,
@@ -310,17 +517,11 @@ function persistSignal(entry, type, status = 'watching') {
 }
 
 function computeStats() {
-  const all    = [...db.wins.records, ...db.misses.records];
-  const tiers  = ['STRONG', 'MEDIUM', 'LOW'];
-  const types  = ['new_creation', 'near_completion', 'completed'];
+  const winRecords = db.wins.records.filter(isEligibleCallRecord);
+  const missRecords = db.misses.records.filter(isEligibleCallRecord);
+  const tiers = ['STRONG', 'MEDIUM', 'LOW'];
+  const types = ['new_creation', 'near_completion', 'completed'];
 
-  const bucket = (arr) => {
-    const wins = arr.filter(r => db.wins.records.includes(r)).length;
-    return { wins, total: arr.length, rate: arr.length ? +(wins / arr.length * 100).toFixed(1) : 0 };
-  };
-
-  // Separate wins/misses sets for bucketing
-  const wSet = new Set(db.wins.records);
   const bucketSets = (wArr, mArr) => {
     const wins = wArr.length, total = wArr.length + mArr.length;
     const avgGain = wArr.length ? +(wArr.reduce((s, r) => s + r.gainPct, 0) / wArr.length).toFixed(1) : 0;
@@ -331,29 +532,29 @@ function computeStats() {
   const bySignal = {};
   for (const t of tiers) {
     bySignal[t] = bucketSets(
-      db.wins.records.filter(r => r.signal === t),
-      db.misses.records.filter(r => r.signal === t)
+      winRecords.filter(r => r.signal === t),
+      missRecords.filter(r => r.signal === t)
     );
   }
 
   const byType = {};
   for (const t of types) {
     byType[t] = bucketSets(
-      db.wins.records.filter(r => r.type === t),
-      db.misses.records.filter(r => r.type === t)
+      winRecords.filter(r => r.type === t),
+      missRecords.filter(r => r.type === t)
     );
   }
 
-  const overall = bucketSets(db.wins.records, db.misses.records);
+  const overall = bucketSets(winRecords, missRecords);
 
   // ROI across ALL calls: wins use gainPct/gainMultiple, misses use peakGainPct
   const allGainPcts = [
-    ...db.wins.records.map(r => r.gainPct ?? 0),
-    ...db.misses.records.map(r => r.peakGainPct ?? 0),
+    ...winRecords.map(r => r.gainPct ?? 0),
+    ...missRecords.map(r => r.peakGainPct ?? 0),
   ];
   const allMults = [
-    ...db.wins.records.map(r => r.gainMultiple ?? 1),
-    ...db.misses.records.map(r => 1 + (r.peakGainPct ?? 0) / 100),
+    ...winRecords.map(r => r.gainMultiple ?? 1),
+    ...missRecords.map(r => 1 + (r.peakGainPct ?? 0) / 100),
   ];
   const avgROIAll = allGainPcts.length ? {
     pct:  +(allGainPcts.reduce((s, v) => s + v, 0) / allGainPcts.length).toFixed(1),
@@ -365,10 +566,10 @@ function computeStats() {
     bySignal,
     byType,
     avgROIAll,
-    totalWins:   db.wins.records.length,
-    totalMisses: db.misses.records.length,
-    recentWins:  db.wins.records.slice(-20).reverse(),
-    recentMisses: db.misses.records.slice(-10).reverse(),
+    totalWins:   winRecords.length,
+    totalMisses: missRecords.length,
+    recentWins:  winRecords.slice(-20).reverse(),
+    recentMisses: missRecords.slice(-10).reverse(),
   };
 }
 
@@ -686,6 +887,25 @@ function buildWatchlistEntry(token, buySellRatio) {
   ].join('\n');
 }
 
+function scoreNewCreationToken(token, fee = feeProfile(token, { strict: GLOBAL_FEE.newCreationStrict })) {
+  let score = 0;
+  const reasons = [];
+  const buys = token.buys_24h ?? 0;
+  const sells = token.sells_24h ?? 0;
+  const bsr = sells > 0 ? buys / sells : buys;
+  const bundlerHold = token.bundler_mhr ?? 0;
+
+  if (fee.scoreBonus > 0) { score += fee.scoreBonus; reasons.push(fee.reason); }
+  if      (bsr >= 4) score += 4, reasons.push(`buy/sell ${bsr.toFixed(1)}x`);
+  else if (bsr >= 2) score += 2, reasons.push(`buy/sell ${bsr.toFixed(1)}x`);
+  if (bundlerHold > 0 && bundlerHold < 0.30) score += 2, reasons.push(`bundler ${Math.round(bundlerHold * 100)}% hold`);
+  if ((token.creator_created_open_count ?? 0) >= 3) score += 2, reasons.push(`creator ${token.creator_created_open_count} grads`);
+  if ((token.visiting_count ?? 0) >= 20) score += 1, reasons.push(`views ${token.visiting_count}`);
+  if (token.twitter || token.telegram || token.website) score += 1, reasons.push('social');
+
+  return { score: Math.min(score, 10), maxScore: 10, reasons };
+}
+
 function buildAlert(token, gainPct, gainMultiple, entryPrice, currentPrice) {
   const social = [
     token.twitter  ? `<a href="${token.twitter}">Twitter</a>`   : null,
@@ -860,19 +1080,45 @@ async function scan() {
     if (alerted.has(token.address)) continue;
 
     if (watchlist.size >= CONFIG.maxWatchlistSize) {
+      saveCandidate({ token, type: 'new_creation', stage: 'capacity', decision: 'skip', decisionReason: 'watchlist_full' });
       console.log(`   🔒 Watchlist full (${CONFIG.maxWatchlistSize}), skipping $${token.symbol}`);
       continue;
     }
 
+    const entryMC = token.usd_market_cap ?? 0;
+    if (!isEligibleMarketCap(entryMC)) {
+      saveCandidate({ token, type: 'new_creation', stage: 'hard_filter', decision: 'skip', decisionReason: `entry_mc_below_${MIN_CALL_MARKET_CAP}` });
+      console.log(`   - $${token.symbol} skipped: MC ${fmtUSD(entryMC)} < ${fmtUSD(MIN_CALL_MARKET_CAP)}`);
+      continue;
+    }
+
     const fee = feeProfile(token, { strict: GLOBAL_FEE.newCreationStrict });
+    const scored = scoreNewCreationToken(token, fee);
     if (!fee.passes) {
+      saveCandidate({ token, type: 'new_creation', stage: 'hard_filter', decision: 'skip', decisionReason: 'fee_below_global', fee, ...scored });
       rejected.noFee++;
       console.log(`   · $${token.symbol} skipped: ${fee.reason} < global ${GLOBAL_FEE.minSol} SOL`);
       continue;
     }
 
-    const entryMC = token.usd_market_cap ?? 0;
-    const entry = { token, fee, entryMC, latestMarketCap: token.usd_market_cap ?? null, snapshotPeakMC: entryMC, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null };
+    const gate = probabilityGate(token, { type: 'new_creation', fee, ...scored });
+    if (!gate.pass) {
+      console.log(`   - $${token.symbol} skipped: probability ${gate.info.probability} < ${CONFIG.minCallProbability}`);
+      continue;
+    }
+
+    saveCandidate({
+      token,
+      type: 'new_creation',
+      stage: 'accepted',
+      decision: 'watch',
+      decisionReason: 'passed_filters',
+      fee,
+      ...scored,
+      probabilityInfo: gate.info,
+    });
+
+    const entry = { token, fee, entryMC, latestMarketCap: token.usd_market_cap ?? null, snapshotPeakMC: entryMC, addedAt: now, entryTs: null, firstOpen: null, currentClose: null, peakClose: null, peakHigh: null, score: scored.score, maxScore: scored.maxScore, reasons: scored.reasons };
     watchlist.set(token.address, entry);
     persistSignal(entry, 'new_creation', 'watching');
     newAdded++;
@@ -1194,19 +1440,36 @@ async function scanMigrated() {
     const migratedAt = token.complete_timestamp ?? token.open_timestamp ?? 0;
     if (migratedAt < cutoff) continue;
 
+    const entryMC = token.usd_market_cap ?? 0;
+    if (!isEligibleMarketCap(entryMC)) {
+      saveCandidate({ token, type: 'completed', stage: 'hard_filter', decision: 'skip', decisionReason: `entry_mc_below_${MIN_CALL_MARKET_CAP}` });
+      console.log(`   - $${token.symbol} skipped: MC ${fmtUSD(entryMC)} < ${fmtUSD(MIN_CALL_MARKET_CAP)}`);
+      continue;
+    }
+
     // Skip already seen
     if (seenMigrated.has(addr)) continue;
     seenMigrated.add(addr);
 
     // Score it
     const { score, reasons } = scoreMigratedToken(token);
+    const maxScore = 42;
+    const fee = feeProfile(token, { strict: GLOBAL_FEE.migratedStrict });
     if (score < 0) {
+      saveCandidate({ token, type: 'completed', stage: 'hard_filter', decision: 'skip', decisionReason: reasons[0] ?? 'hard_filter', score, maxScore, reasons, fee });
       console.log(`   ✗ $${token.symbol} filtered: ${reasons[0]}`);
       continue;
     }
 
     if (score < MIGRATION_CONFIG.watchThreshold) {
+      saveCandidate({ token, type: 'completed', stage: 'score_filter', decision: 'skip', decisionReason: 'score_below_watch_threshold', score, maxScore, reasons, fee });
       console.log(`   · $${token.symbol} score ${score} (below threshold)`);
+      continue;
+    }
+
+    const gate = probabilityGate(token, { type: 'completed', score, maxScore, fee, reasons });
+    if (!gate.pass) {
+      console.log(`   - $${token.symbol} skipped: probability ${gate.info.probability} < ${CONFIG.minCallProbability}`);
       continue;
     }
 
@@ -1215,6 +1478,18 @@ async function scanMigrated() {
       : '?';
 
     console.log(`   ${migratedTier(score)} $${token.symbol} score=${score} SM=${token.smart_degen_count} KOL=${token.renowned_count} grad=${gradMin}min`);
+    saveCandidate({
+      token,
+      type: 'completed',
+      stage: 'accepted',
+      decision: 'watch',
+      decisionReason: 'passed_filters',
+      score,
+      maxScore,
+      reasons,
+      fee,
+      probabilityInfo: gate.info,
+    });
 
     // Alert Telegram
     await sendTelegram(buildMigrationAlert(token, score, reasons, gradMin));
@@ -1223,16 +1498,17 @@ async function scanMigrated() {
     // Add to kline watchlist for 2x tracking
     const entry = {
       token,
-      fee:          feeProfile(token),
-      entryMC:      token.usd_market_cap ?? 0,
+      fee,
+      entryMC,
       latestMarketCap: token.usd_market_cap ?? null,
-      snapshotPeakMC: token.usd_market_cap ?? 0,
+      snapshotPeakMC: entryMC,
       addedAt:      Date.now(),
       entryTs:      null,
       firstOpen:    null,
       peakHigh:     null,
       lastMultiple: 1,
       score,
+      maxScore,
       reasons,
     };
     migratedWatch.set(addr, entry);
@@ -1582,37 +1858,68 @@ async function scanNearCompletion() {
       continue;
     }
 
+    const entryMC = token.usd_market_cap ?? 0;
+    if (!isEligibleMarketCap(entryMC)) {
+      saveCandidate({ token, type: 'near_completion', stage: 'hard_filter', decision: 'skip', decisionReason: `entry_mc_below_${MIN_CALL_MARKET_CAP}` });
+      console.log(`   - $${token.symbol} skipped: MC ${fmtUSD(entryMC)} < ${fmtUSD(MIN_CALL_MARKET_CAP)}`);
+      continue;
+    }
+
     if (seenNearCompl.has(addr)) continue;
     seenNearCompl.add(addr);
 
     const { score, reasons } = scoreNearCompletionToken(token);
+    const maxScore = NEAR_COMPL_MAX_SCORE;
+    const fee = feeProfile(token, { strict: GLOBAL_FEE.nearCompletionStrict });
     if (score < 0) {
+      saveCandidate({ token, type: 'near_completion', stage: 'hard_filter', decision: 'skip', decisionReason: reasons[0] ?? 'hard_filter', score, maxScore, reasons, fee });
       console.log(`   ✗ $${token.symbol} filtered: ${reasons[0]}`);
       continue;
     }
     if (score < NEAR_COMPLETION_CONFIG.watchThreshold) {
+      saveCandidate({ token, type: 'near_completion', stage: 'score_filter', decision: 'skip', decisionReason: 'score_below_watch_threshold', score, maxScore, reasons, fee });
       console.log(`   · $${token.symbol} score ${score} (below threshold)`);
+      continue;
+    }
+
+    const gate = probabilityGate(token, { type: 'near_completion', score, maxScore, fee, reasons });
+    if (!gate.pass) {
+      console.log(`   - $${token.symbol} skipped: probability ${gate.info.probability} < ${CONFIG.minCallProbability}`);
       continue;
     }
 
     const action = getAction(score, NEAR_COMPL_MAX_SCORE);
     console.log(`   ${nearComplTier(score)} $${token.symbol} score=${score} SM=${token.smart_degen_count ?? 0} KOL=${token.renowned_count ?? 0} → ${action.icon} ${action.label}`);
 
+    saveCandidate({
+      token,
+      type: 'near_completion',
+      stage: 'accepted',
+      decision: 'watch',
+      decisionReason: 'passed_filters',
+      score,
+      maxScore,
+      reasons,
+      fee,
+      probabilityInfo: gate.info,
+    });
+
     await sendTelegram(buildNearCompletionAlert(token, score, reasons));
     newAlerted++;
 
     const entry = {
       token,
-      fee:          feeProfile(token),
-      entryMC:      token.usd_market_cap ?? 0,
+      fee,
+      entryMC,
       latestMarketCap: token.usd_market_cap ?? null,
-      snapshotPeakMC: token.usd_market_cap ?? 0,
+      snapshotPeakMC: entryMC,
       addedAt:      Date.now(),
       entryTs:      null,
       firstOpen:    null,
       peakHigh:     null,
       lastMultiple: 1,
       score,
+      maxScore,
       reasons,
     };
     nearComplWatch.set(addr, entry);
@@ -1685,6 +1992,13 @@ function serializeWatchlistEntry(address, entry) {
   s += Math.min(sm, 2);
   s += Math.min(fee.scoreBonus, 2);
   const score = Math.min(s, 10);
+  const prob = callProbability(t, {
+    type: 'new_creation',
+    score: entry.score ?? score,
+    maxScore: entry.maxScore ?? 10,
+    fee,
+    reasons: entry.reasons ?? [],
+  });
   const action = getAction(score, 10);
   return {
     address,
@@ -1709,6 +2023,8 @@ function serializeWatchlistEntry(address, entry) {
     rugRatio:     t.rug_ratio,
     feeSol:       fee.sol,
     feeRoute:     fee.route,
+    probability:  prob.probability,
+    probabilityModel: prob.model,
     score,
     action:       action.label,
     actionIcon:   action.icon,
@@ -1721,7 +2037,10 @@ function serializeWatchlistEntry(address, entry) {
 
 function serializeWatchlist(map) {
   const out = [];
-  for (const [address, entry] of map) out.push(serializeWatchlistEntry(address, entry));
+  for (const [address, entry] of map) {
+    const row = serializeWatchlistEntry(address, entry);
+    if (isEligibleCallRecord(row)) out.push(row);
+  }
   return out;
 }
 
@@ -1732,6 +2051,13 @@ function serializeGraduationEntry(address, entry, type) {
   const maxScore  = type === 'near_completion' ? NEAR_COMPL_MAX_SCORE : 42;
   const action    = getAction(score, maxScore);
   const fee       = entry.fee ?? feeProfile(entry.token);
+  const prob      = callProbability(entry.token, {
+    type,
+    score,
+    maxScore,
+    fee,
+    reasons: entry.reasons ?? [],
+  });
   return {
     address,
     type,
@@ -1750,6 +2076,8 @@ function serializeGraduationEntry(address, entry, type) {
     lastMultiple: entry.lastMultiple,
     feeSol:       fee.sol,
     feeRoute:     fee.route,
+    probability:  prob.probability,
+    probabilityModel: prob.model,
     score,
     maxScore,
     reasons:      entry.reasons ?? [],
@@ -1772,8 +2100,14 @@ function serializeGraduationEntry(address, entry, type) {
 
 function serializeGraduationWatch() {
   const out = [];
-  for (const [addr, entry] of nearComplWatch) out.push(serializeGraduationEntry(addr, entry, 'near_completion'));
-  for (const [addr, entry] of migratedWatch)  out.push(serializeGraduationEntry(addr, entry, 'completed'));
+  for (const [addr, entry] of nearComplWatch) {
+    const row = serializeGraduationEntry(addr, entry, 'near_completion');
+    if (isEligibleCallRecord(row)) out.push(row);
+  }
+  for (const [addr, entry] of migratedWatch) {
+    const row = serializeGraduationEntry(addr, entry, 'completed');
+    if (isEligibleCallRecord(row)) out.push(row);
+  }
   return out;
 }
 
@@ -1787,6 +2121,7 @@ const dashServer = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
 
   if (url === '/api/state') {
+    const signalRows = db.signals.records.filter(isEligibleCallRecord);
     const payload = JSON.stringify({
       session: {
         startedAt: session.startedAt,
@@ -1795,7 +2130,7 @@ const dashServer = http.createServer(async (req, res) => {
         uptime:    fmtUptime(),
       },
       watchlist:    serializeWatchlist(watchlist),
-      signals:      db.signals.records.slice(-100).reverse(),
+      signals:      signalRows.slice(-100).reverse(),
       wins:         wins.slice(-50).map(w => ({
         symbol:       w.token.symbol,
         name:         w.token.name,
@@ -1828,7 +2163,7 @@ const dashServer = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/health') {
-    const supabase = await recordStore.health(['wins', 'misses', 'calls', 'signals', 'active_watch']);
+    const supabase = await recordStore.health(['wins', 'misses', 'calls', 'signals', 'candidates', 'active_watch']);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({
       ok: true,
@@ -1839,6 +2174,7 @@ const dashServer = http.createServer(async (req, res) => {
         wins: db.wins.records.length,
         misses: db.misses.records.length,
         signals: db.signals.records.length,
+        candidates: db.candidates.records.length,
       },
       updatedAt: Date.now(),
     }));
@@ -1852,14 +2188,17 @@ const dashServer = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/wins') {
+    const winRows = db.wins.records.filter(isEligibleCallRecord);
+    const missRows = db.misses.records.filter(isEligibleCallRecord);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ wins: db.wins.records.slice(-100).reverse(), misses: db.misses.records.slice(-100).reverse() }));
+    res.end(JSON.stringify({ wins: winRows.slice(-100).reverse(), misses: missRows.slice(-100).reverse() }));
     return;
   }
 
   if (url === '/api/misses') {
     // Near-misses: tokens that expired without hitting target, sorted by peakGainPct desc
     const nearMisses = [...db.misses.records]
+      .filter(isEligibleCallRecord)
       .filter(r => r.peakGainPct != null)
       .sort((a, b) => b.peakGainPct - a.peakGainPct)
       .slice(0, 100);
@@ -1869,7 +2208,8 @@ const dashServer = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/signals') {
-    const signals = await recordStore.loadRecords('signals', db.signals.records);
+    const signals = (await recordStore.loadRecords('signals', db.signals.records))
+      .filter(isEligibleCallRecord);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({
       signals: [...signals].sort((a, b) => (b.updatedAt || b.ts || 0) - (a.updatedAt || a.ts || 0)).slice(0, 500),
@@ -1878,8 +2218,28 @@ const dashServer = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url === '/api/candidates') {
+    const candidates = db.candidates.records
+      .filter(r => !r.features?.entryMC || isEligibleCallRecord(r.features))
+      .sort((a, b) => (b.updatedAt || b.ts || 0) - (a.updatedAt || a.ts || 0))
+      .slice(0, 500);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({
+      candidates,
+      stats: {
+        total: db.candidates.records.length,
+        accepted: db.candidates.records.filter(r => r.decision === 'watch').length,
+        skipped: db.candidates.records.filter(r => r.decision === 'skip').length,
+        minProbability: CONFIG.minCallProbability > 0 ? CONFIG.minCallProbability : null,
+      },
+      updatedAt: Date.now(),
+    }));
+    return;
+  }
+
   if (url === '/api/calls') {
-    const calls = await recordStore.loadRecords('calls', loadJSON(CALLS_FILE).records);
+    const calls = (await recordStore.loadRecords('calls', loadJSON(CALLS_FILE).records))
+      .filter(isEligibleCallRecord);
     const wins = calls.filter(r => r.verdict === 'W').length;
     const losses = calls.filter(r => r.verdict === 'L').length;
     const pending = calls.filter(r => r.verdict === 'pending').length;
@@ -1902,8 +2262,8 @@ const dashServer = http.createServer(async (req, res) => {
 
   if (url === '/api/export') {
     // Full data export — all wins + misses, no limit
-    const wins   = [...db.wins.records].sort((a, b) => b.ts - a.ts);
-    const misses = [...db.misses.records].sort((a, b) => b.ts - a.ts);
+    const wins   = db.wins.records.filter(isEligibleCallRecord).sort((a, b) => b.ts - a.ts);
+    const misses = db.misses.records.filter(isEligibleCallRecord).sort((a, b) => b.ts - a.ts);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({ wins, misses, exportedAt: Date.now() }));
     return;
@@ -1921,11 +2281,11 @@ const dashServer = http.createServer(async (req, res) => {
     const lines = [
       '=== WINS ===',
       winCols.join(','),
-      ...db.wins.records.map(r => toRow(winCols, r)),
+      ...db.wins.records.filter(isEligibleCallRecord).map(r => toRow(winCols, r)),
       '',
       '=== MISSES ===',
       missCols.join(','),
-      ...db.misses.records.map(r => toRow(missCols, r)),
+      ...db.misses.records.filter(isEligibleCallRecord).map(r => toRow(missCols, r)),
     ];
     res.writeHead(200, {
       'Content-Type': 'text/csv',

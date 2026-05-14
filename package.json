@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build && node scripts/copy-static.cjs",
     "preview": "vite preview",
     "scanner": "node scanner.js",
+    "backtest": "node scripts/backtest-candidates.cjs",
     "start": "node server.js"
   },
   "dependencies": {

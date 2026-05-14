@@ -42,6 +42,7 @@ const MIGRATION_INTERVAL_MS = 90_000;
 const MONITOR_INTERVAL_MS   = 60_000;
 const MONITOR_MAX_PER_CYCLE = Number(process.env.CALL_MONITOR_MAX_PER_CYCLE || 4);
 const KLINE_DELAY_MS        = Number(process.env.GMGN_KLINE_DELAY_MS || 1_500);
+const MIN_CALL_MARKET_CAP   = Number(process.env.MIN_CALL_MARKET_CAP || 5000);
 const recordStore           = createRecordStore();
 
 const GLOBAL_FEE = {
@@ -114,7 +115,9 @@ function saveCall(record) {
 const db             = loadCalls();
 db.records           = await recordStore.loadRecords('calls', db.records);
 const isMigratedCall = record => record.type === 'completed';
-const visibleCalls = () => db.records.filter(isMigratedCall);
+const callEntryMC = record => Number(record?.mcAtCall ?? record?.entryMC ?? 0);
+const isEligibleCallRecord = record => callEntryMC(record) >= MIN_CALL_MARKET_CAP;
+const visibleCalls = () => db.records.filter(isMigratedCall).filter(isEligibleCallRecord);
 const seenAddresses  = new Set(visibleCalls().map(r => r.address));
 
 console.log(`[call-scanner] Loaded ${visibleCalls().length} migrated calls (${visibleCalls().filter(r=>r.verdict==='pending').length} pending)`);
@@ -298,6 +301,7 @@ function calcWinThreshold(signal, estLow) {
 // ─── Create call entry ────────────────────────────────────────────────────────
 function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, sm, kol, gradMin, reasons, fee }) {
   if (seenAddresses.has(address)) return null;
+  if (!isEligibleCallRecord({ mcAtCall })) return null;
 
   const { estRange, estLow } = estProfit(signal, timeframe);
   const winThreshold         = calcWinThreshold(signal, estLow);

@@ -297,6 +297,8 @@ tailwind.config = {
 // ─── API ─────────────────────────────────────────────────────────────────────
 const BASE = window.CALL_SCANNER_BASE
   || (location.protocol === 'http:' || location.protocol === 'https:' ? location.origin : 'http://localhost:3001');
+const MIN_CALL_MARKET_CAP = 5_000;
+const hasEligibleCallMC = record => Number(record?.mcAtCall ?? record?.entryMC ?? 0) >= MIN_CALL_MARKET_CAP;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fmtK = v => {
@@ -652,8 +654,20 @@ async function fetchCalls() {
   setStatus('connecting…', false);
   try {
     const data = await fetch(BASE + '/api/calls', { cache: 'no-store' }).then(r => r.json());
-    allCalls = (data.calls ?? []).map(normalize);
-    render(data.stats);
+    const eligibleCalls = (data.calls ?? []).filter(hasEligibleCallMC);
+    allCalls = eligibleCalls.map(normalize);
+    const wins = eligibleCalls.filter(r => r.verdict === 'W').length;
+    const losses = eligibleCalls.filter(r => r.verdict === 'L').length;
+    const pending = eligibleCalls.filter(r => r.verdict === 'pending').length;
+    const settled = wins + losses;
+    render({
+      total: eligibleCalls.length,
+      wins,
+      losses,
+      pending,
+      settled,
+      winRate: settled ? +(wins / settled * 100).toFixed(1) : 0,
+    });
     setStatus('live', true);
   } catch {
     setStatus('offline — is call-scanner running?', false);

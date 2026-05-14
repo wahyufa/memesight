@@ -561,6 +561,9 @@ const BASE       = (typeof window !== 'undefined' && window.SCANNER_BASE) || 'ht
 const API_URL    = BASE + '/api/state';
 const REFRESH_MS = 15_000; // keep MC Now close to scanner state
 const MIN_MC     = 5_000;
+const MIN_CALL_MARKET_CAP = MIN_MC;
+const callEntryMC = record => Number(record?.entryMC ?? record?.start_mc ?? record?.mcAtCall ?? 0);
+const hasEligibleCallMC = record => callEntryMC(record) >= MIN_CALL_MARKET_CAP;
 
 // ── State ──
 let sortKey    = 'market_cap';
@@ -722,6 +725,7 @@ const mapToken = (t, migratedFlag) => {
     gainPct:      t.gainPct,
     score:        t.score,
     maxScore:     t.maxScore,
+    probability:  t.probability ?? null,
     reasons:      t.reasons || [],
     smartMoney:   t.smartMoney ?? 0,
     kol:          t.kol ?? 0,
@@ -806,6 +810,7 @@ function baseWatchlist() {
   const cutoffMs = filterTime > 0 ? Date.now() - filterTime * 60_000 : 0;
   return allCoins.filter(c => {
       if (!c.migrated) return false;
+      if (!hasEligibleCallMC(c)) return false;
       if (c.market_cap < MIN_MC) return false;
       if (c.createdAt && (nowSec - c.createdAt) > 3600 && c.market_cap < 10_000) return false;
       if (filterTime > 0 && (!c.called_at || c.called_at < cutoffMs)) return false;
@@ -832,6 +837,7 @@ function getWatchlist() {
 function getMissList() {
   const cutoffMs = filterTime > 0 ? Date.now() - filterTime * 60_000 : 0;
   return allMisses
+    .filter(hasEligibleCallMC)
     .filter(m => filterSig === 'all' || m.signal === filterSig)
     .filter(m => filterTime === 0 || (m.ts && m.ts >= cutoffMs))
     .sort((a, b) => (b.peakGainPct ?? -999) - (a.peakGainPct ?? -999));
@@ -850,9 +856,10 @@ let allWinsMap  = new Map(); // address → win record
 async function loadTop5() {
   try {
     const { wins } = await fetch(BASE + '/api/wins').then(r => r.json());
-    if (!wins || !wins.length) return;
-    allWinsMap  = new Map(wins.map(w => [w.address, w]));
-    allTimeTop5 = [...wins]
+    const eligibleWins = (wins || []).filter(hasEligibleCallMC);
+    if (!eligibleWins.length) return;
+    allWinsMap  = new Map(eligibleWins.map(w => [w.address, w]));
+    allTimeTop5 = [...eligibleWins]
       .sort((a, b) => b.gainMultiple - a.gainMultiple)
       .slice(0, 5);
     renderTop5(allTimeTop5);
@@ -1057,6 +1064,7 @@ function renderWatchlist(list) {
       <td class="px-3 py-2.5" style="min-width:260px">
         <div class="flex items-center gap-2 min-w-0">
           ${sigBadge(c.buy_signal)}
+          ${c.probability != null ? `<span class="text-[10px] font-bold rounded-full bg-slate-100 text-slate-500 px-1.5 py-0.5">${Math.round(c.probability * 100)}%</span>` : ''}
           <div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
             ${reasons.slice(0, 3).map(r => `<span class="text-xs text-slate-400 truncate max-w-[130px]">${r}</span>`).join('<span class="text-slate-300">·</span>')}
             ${warnings.map(w => `<span class="text-xs text-amber-500/80 truncate max-w-[140px]">${w}</span>`).join('<span class="text-slate-300">·</span>')}
@@ -1351,11 +1359,12 @@ async function loadWinHistory() {
   const body = document.getElementById('winHistoryBody');
   try {
     const { wins } = await fetch(BASE + '/api/wins').then(r => r.json());
-    if (!wins?.length) {
+    const eligibleWins = (wins || []).filter(hasEligibleCallMC);
+    if (!eligibleWins.length) {
       body.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">No wins recorded yet.</td></tr>';
       return;
     }
-    whData = wins;
+    whData = eligibleWins;
     renderWinHistory();
 
     // attach sort listeners once
@@ -1493,7 +1502,10 @@ function renderMobileCards(list) {
           </div>
           <div class="text-xs text-slate-400 truncate">${c.name}</div>
         </div>
-        <span class="${sigCls} text-xs font-bold px-2 py-0.5 rounded-full">${c.buy_signal}</span>
+        <div class="flex items-center gap-1.5">
+          ${c.probability != null ? `<span class="text-[10px] font-bold rounded-full bg-slate-100 dark:bg-[#0f1117] text-slate-500 px-1.5 py-0.5">${Math.round(c.probability * 100)}%</span>` : ''}
+          <span class="${sigCls} text-xs font-bold px-2 py-0.5 rounded-full">${c.buy_signal}</span>
+        </div>
       </div>
       <div class="grid grid-cols-3 gap-2 text-xs mb-3">
         <div class="bg-slate-50 dark:bg-[#0f1117] rounded-xl p-2.5 text-center">
@@ -1570,13 +1582,13 @@ function renderMissCards(list) {
 async function loadMisses() {
   try {
     const { misses } = await fetch(BASE + '/api/misses').then(r => r.json());
-    allMisses = misses || [];
+    allMisses = (misses || []).filter(hasEligibleCallMC);
     updateWatchTabCounts();
     if (watchTab === 'misses') render();
-    if (!misses?.length) return;
+    if (!allMisses.length) return;
     document.getElementById('missSection').classList.add('hidden');
     const body = document.getElementById('missBody');
-    body.innerHTML = misses.slice(0, 50).map(m => {
+    body.innerHTML = allMisses.slice(0, 50).map(m => {
       const pct = m.peakGainPct ?? 0;
       const col = pct >= 40 ? 'text-amber-500' : pct >= 20 ? 'text-slate-500' : 'text-slate-400';
       const sigCls = m.signal === 'STRONG' ? 'signal-strong' : m.signal === 'MEDIUM' ? 'signal-medium' : 'signal-low';

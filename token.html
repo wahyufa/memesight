@@ -83,6 +83,9 @@ tailwind.config = {
 const BASE  = (typeof window !== 'undefined' && window.SCANNER_BASE) || 'http://localhost:3000';
 const API   = BASE + '/api/state';
 const STATS = BASE + '/api/stats';
+const MIN_CALL_MARKET_CAP = 5_000;
+const callEntryMC = record => Number(record?.entryMC ?? record?.startMC ?? record?.marketCap ?? 0);
+const hasEligibleCallMC = record => callEntryMC(record) >= MIN_CALL_MARKET_CAP;
 
 const params  = new URLSearchParams(location.search);
 const ADDRESS = params.get('address') || '';
@@ -379,14 +382,14 @@ async function load() {
     const allTokens = [
       ...(stateRes.watchlist||[]).map(t=>({...t,_src:'watchlist'})),
       ...(stateRes.graduationWatch||[]).map(t=>({...t,_src:'graduation'})),
-    ];
+    ].filter(hasEligibleCallMC);
     let t = allTokens.find(t => t.address === ADDRESS);
 
     document.getElementById('lastUpdate').textContent = 'Updated '+new Date().toLocaleTimeString('en-US',{hour12:false});
 
     if (!t) {
       // Fall back to historical wins record
-      const winRecord = (winsRes?.wins||[]).find(w => w.address === ADDRESS);
+      const winRecord = (winsRes?.wins||[]).filter(hasEligibleCallMC).find(w => w.address === ADDRESS);
       if (winRecord) {
         renderWinRecord(winRecord, statsRes);
         return;

@@ -39,9 +39,12 @@ const DATA_DIR              = path.join(__dirname, 'data');
 const CALLS_FILE            = path.join(DATA_DIR, 'calls.json');
 const MAX_CALLS             = 500;
 const MIGRATION_INTERVAL_MS = 90_000;
-const MONITOR_INTERVAL_MS   = 60_000;
-const MONITOR_MAX_PER_CYCLE = Number(process.env.CALL_MONITOR_MAX_PER_CYCLE || 4);
+const MONITOR_INTERVAL_MS   = Number(process.env.CALL_MONITOR_INTERVAL_MS || 30_000);
+const MONITOR_MAX_PER_CYCLE = Number(process.env.CALL_MONITOR_MAX_PER_CYCLE || 20);
 const KLINE_DELAY_MS        = Number(process.env.GMGN_KLINE_DELAY_MS || 1_500);
+const KLINE_RESOLUTION      = process.env.CALL_KLINE_RESOLUTION || process.env.GMGN_KLINE_RESOLUTION || '1m';
+const KLINE_FALLBACK_RESOLUTION = KLINE_RESOLUTION === '1m' ? null : '1m';
+const DIRECT_SNAPSHOT_ENABLED = process.env.CALL_DIRECT_SNAPSHOT_ENABLED !== 'false';
 const MIN_CALL_MARKET_CAP   = Number(process.env.MIN_CALL_MARKET_CAP || 5000);
 const recordStore           = createRecordStore();
 
@@ -172,10 +175,31 @@ function klineTimestampMs(value, fallbackMs = Date.now() - 2 * 3_600_000) {
   return fallbackMs;
 }
 
-function fetchKline(address, sinceTs) {
+function fetchKline(address, sinceTs, resolution = KLINE_RESOLUTION) {
   const fromMs = klineTimestampMs(sinceTs);
   const toMs = Date.now();
-  return gmgn(`market kline --chain sol --address ${address} --resolution 1m --from ${fromMs} --to ${toMs}`);
+  const data = gmgn(`market kline --chain sol --address ${address} --resolution ${resolution} --from ${fromMs} --to ${toMs}`);
+  if ((data?.list?.length ?? 0) || !KLINE_FALLBACK_RESOLUTION || resolution === KLINE_FALLBACK_RESOLUTION) return data;
+  return gmgn(`market kline --chain sol --address ${address} --resolution ${KLINE_FALLBACK_RESOLUTION} --from ${fromMs} --to ${toMs}`);
+}
+
+function fetchTokenSnapshot(address) {
+  if (!DIRECT_SNAPSHOT_ENABLED || !address) return null;
+  const data = gmgn(`token info --chain sol --address ${address}`);
+  const token = data?.token ?? data?.data ?? data?.info ?? data;
+  if (!token || typeof token !== 'object') return null;
+  return token;
+}
+
+function snapshotMarketCap(token) {
+  return firstNumber(
+    token?.usd_market_cap,
+    token?.market_cap,
+    token?.marketCap,
+    token?.mcap,
+    token?.fdv,
+    token?.fully_diluted_valuation
+  );
 }
 
 function candleTimeMs(candle) {
@@ -332,7 +356,10 @@ function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, 
     currentMC:     Math.round(mcAtCall),
     peakMC:        Math.round(mcAtCall),
     peakPct:       0,
+    peakSource:    'entry',
+    peakAt:        now,
     marketSnapshotAt: null,
+    currentSource: 'entry',
     verdict:       'pending',
     settledAt:     null,
     snapshots:     buildSnapshots(now),
@@ -347,27 +374,31 @@ function createCall({ address, symbol, name, type, mcAtCall, signal, timeframe, 
 }
 
 // ─── MC update ────────────────────────────────────────────────────────────────
-function updateCurrentMC(record, candidateMC) {
+function updateCurrentMC(record, candidateMC, source = null) {
   record.currentMC = Math.round(candidateMC);
+  if (source) record.currentSource = source;
 }
 
-function updatePeakMC(record, candidateMC) {
+function updatePeakMC(record, candidateMC, source = 'unknown', observedAt = Date.now()) {
   if (candidateMC > record.peakMC) {
     record.peakMC  = Math.round(candidateMC);
     record.peakPct = parseFloat(((record.peakMC - record.mcAtCall) / record.mcAtCall * 100).toFixed(2));
+    record.peakSource = source;
+    record.peakAt = observedAt;
   }
 }
 
-function updatePendingSnapshot(address, marketCap) {
+function updatePendingSnapshot(address, marketCap, source = 'snapshot') {
   const mc = Number(marketCap);
   if (!Number.isFinite(mc) || mc <= 0) return false;
 
   const record = db.records.find(r => r.address === address && r.verdict === 'pending');
   if (!record) return false;
 
-  updateCurrentMC(record, mc);
-  updatePeakMC(record, mc);
-  record.marketSnapshotAt = Date.now();
+  const observedAt = Date.now();
+  updateCurrentMC(record, mc, source);
+  if (!record.exitWindowEnd || observedAt <= record.exitWindowEnd) updatePeakMC(record, mc, source, observedAt);
+  record.marketSnapshotAt = observedAt;
   return true;
 }
 
@@ -403,7 +434,8 @@ async function settleStale() {
     // Migrate: add snapshots for calls created before this feature
     if (!call.snapshots) call.snapshots = buildSnapshots(call.ts);
 
-    call.sinceTs = klineTimestampMs(call.sinceTs, (call.ts || Date.now()) - 60_000);
+    const recoveryFrom = (call.ts || Date.now()) - 60_000;
+    call.sinceTs = Math.min(klineTimestampMs(call.sinceTs, recoveryFrom), recoveryFrom);
     const kline   = fetchKline(call.address, call.sinceTs);
     const candles = kline?.list ?? [];
 
@@ -416,11 +448,11 @@ async function settleStale() {
         const windowCandles = candles.filter(c => candleTimeMs(c) <= call.exitWindowEnd);
         if (windowCandles.length) {
           const peakHigh = maxHighBetween(windowCandles, call.ts, call.exitWindowEnd);
-          if (peakHigh > 0) updatePeakMC(call, (peakHigh / call.entryClose) * call.mcAtCall);
+          if (peakHigh > 0) updatePeakMC(call, (peakHigh / call.entryClose) * call.mcAtCall, 'kline_recovery', call.exitWindowEnd);
         }
         // Current MC from latest candle
         const lastClose = parseFloat(candles[candles.length - 1].close);
-        if (lastClose) call.currentMC = Math.round((lastClose / call.entryClose) * call.mcAtCall);
+        if (lastClose) updateCurrentMC(call, (lastClose / call.entryClose) * call.mcAtCall, 'kline_recovery');
         // Recover trajectory snapshots
         recoverSnapshots(call, candles);
       }
@@ -455,7 +487,7 @@ async function scanMigration() {
   for (const token of tokens) {
     const addr = token.address;
     if (seenAddresses.has(addr)) {
-      if (updatePendingSnapshot(addr, token.usd_market_cap)) snapshots++;
+      if (updatePendingSnapshot(addr, token.usd_market_cap, 'trenches_snapshot')) snapshots++;
       continue;
     }
 
@@ -534,6 +566,7 @@ async function scanMigration() {
   if (snapshots) {
     try { fs.writeFileSync(CALLS_FILE, JSON.stringify(db), 'utf8'); }
     catch (e) { console.error('[save]', e.message); }
+    for (const call of db.records.filter(r => r.marketSnapshotAt)) void recordStore.saveRecord('calls', call);
   }
   console.log(`   ${tokens.length} scanned | ${newCalls} new calls | ${snapshots} MC updates`);
 }
@@ -563,7 +596,7 @@ async function scanNewCreation() {
   for (const token of tokens) {
     const addr = token.address;
     if (seenAddresses.has(addr)) {
-      if (updatePendingSnapshot(addr, token.usd_market_cap)) snapshots++;
+      if (updatePendingSnapshot(addr, token.usd_market_cap, 'trenches_snapshot')) snapshots++;
       continue;
     }
 
@@ -622,6 +655,7 @@ async function scanNewCreation() {
   if (snapshots) {
     try { fs.writeFileSync(CALLS_FILE, JSON.stringify(db), 'utf8'); }
     catch (e) { console.error('[save]', e.message); }
+    for (const call of db.records.filter(r => r.marketSnapshotAt)) void recordStore.saveRecord('calls', call);
   }
   console.log(`   ${tokens.length} scanned | ${newCalls} new calls | ${snapshots} MC updates`);
 }
@@ -639,6 +673,7 @@ async function monitorCalls() {
   let updated   = 0;
   let settled   = 0;
   let snapped   = 0;
+  let directPeaks = 0;
   const changed = [];
 
   for (const call of batch) {
@@ -646,7 +681,15 @@ async function monitorCalls() {
     if (!call.snapshots) call.snapshots = buildSnapshots(call.ts);
 
     await sleep(KLINE_DELAY_MS);
-    call.sinceTs = klineTimestampMs(call.sinceTs, (call.ts || Date.now()) - 60_000);
+    const beforeSnapshotPeak = call.peakMC ?? 0;
+    const tokenSnapshot = fetchTokenSnapshot(call.address);
+    const snapshotMC = snapshotMarketCap(tokenSnapshot);
+    if (snapshotMC && updatePendingSnapshot(call.address, snapshotMC, 'direct_snapshot')) {
+      if ((call.peakMC ?? 0) > beforeSnapshotPeak) directPeaks++;
+    }
+
+    const recoveryFrom = (call.ts || Date.now()) - 60_000;
+    call.sinceTs = Math.min(klineTimestampMs(call.sinceTs, recoveryFrom), recoveryFrom);
     const kline   = fetchKline(call.address, call.sinceTs);
     call.lastCheckedAt = Date.now();
     changed.push(call);
@@ -661,13 +704,14 @@ async function monitorCalls() {
 
     // Current MC + peak MC from price ratio × mcAtCall
     const lastClose  = parseFloat(candles[candles.length - 1].close);
-    const peakHigh   = maxHighBetween(candles, call.ts, Math.min(now, call.exitWindowEnd));
+    const checkNow   = Date.now();
+    const peakHigh   = maxHighBetween(candles, call.ts, Math.min(checkNow, call.exitWindowEnd));
     if (!lastClose || lastClose <= 0) continue;
     const currentMC  = (lastClose / call.entryClose) * call.mcAtCall;
     const peakMCCand = (peakHigh  / call.entryClose) * call.mcAtCall;
 
-    updateCurrentMC(call, currentMC);
-    if (peakHigh > 0 && peakMCCand > call.peakMC) updatePeakMC(call, peakMCCand);
+    updateCurrentMC(call, currentMC, 'kline');
+    if (peakHigh > 0 && peakMCCand > call.peakMC) updatePeakMC(call, peakMCCand, 'kline_high', checkNow);
 
     // Record due trajectory snapshots
     for (const snap of call.snapshots) {
@@ -680,7 +724,7 @@ async function monitorCalls() {
 
     updated++;
 
-    if (now >= call.exitWindowEnd) {
+    if (checkNow >= call.exitWindowEnd) {
       // Fill any remaining unrecorded snapshots from kline before settling
       recoverSnapshots(call, candles);
       settle(call);
@@ -693,7 +737,7 @@ async function monitorCalls() {
     catch (e) { console.error('[save]', e.message); }
     for (const call of changed) void recordStore.saveRecord('calls', call);
   }
-  console.log(`   Updated: ${updated} | Snapshots recorded: ${snapped} | Settled: ${settled}`);
+  console.log(`   Updated: ${updated} | Direct peak updates: ${directPeaks} | Snapshots recorded: ${snapped} | Settled: ${settled}`);
 }
 
 // ─── HTTP server ──────────────────────────────────────────────────────────────
